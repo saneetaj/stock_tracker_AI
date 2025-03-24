@@ -10,8 +10,6 @@ import plotly.graph_objects as go
 openai_api_key = st.secrets["openai_api_key"]
 
 # Initialize OpenAI client
-#client = openai.OpenAI(api_key=openai_api_key)
-client = openai #instead of openai.OpenAI
 openai.api_key = openai_api_key
 
 # Function to fetch stock data
@@ -33,28 +31,27 @@ def generate_signals(data):
     return data
 
 # Function to fetch market sentiment using OpenAI (optimized for rate limits)
-import time
-import openai
-
 def get_market_sentiment(tickers):
     sentiments = {}
+    rate_limit_error_flag = False  # Flag to track if rate limit error has occurred
+
     for ticker in tickers:
         attempt = 1
         while attempt <= 5:  # Retry up to 5 times
             try:
                 prompt = f"Analyze the market sentiment for {ticker}. Provide a short summary (bullish, bearish, or neutral) with key reasons."
-                response = client.chat.completions.create(
+                response = openai.ChatCompletion.create(
                     model="gpt-3.5-turbo",
                     messages=[{"role": "user", "content": prompt}]
                 )
-                # Log response headers to check rate limit status
-                print(f"Response Headers for {ticker}: {response.headers}")
                 sentiments[ticker] = response.choices[0].message.content
                 break  # Exit retry loop if successful
             except openai.RateLimitError:
+                if not rate_limit_error_flag:
+                    sentiments['error'] = "⚠️ Rate limit reached. Try again later."
+                    rate_limit_error_flag = True  # Only show the error once
                 if attempt < 5:
                     wait_time = 2 ** attempt  # Exponential backoff
-                    print(f"Rate limit error for {ticker}, retrying after {wait_time} seconds...")
                     time.sleep(wait_time)
                     attempt += 1
                 else:
@@ -63,13 +60,13 @@ def get_market_sentiment(tickers):
             except Exception as e:
                 sentiments[ticker] = f"⚠️ Error: {e}"
                 break
-        time.sleep(1)  # Small delay between tickers
- 
-    return sentiments
+
+        time.sleep(2)  # Small delay between tickers
     
+    return sentiments
+
 # Streamlit UI
 st.title("📈 AI-Powered Stock Tracker")
-st.sidebar.subheader(f"📢 Sentiment for {ticker}")
 
 # User input for multiple stock tickers
 tickers = st.text_input("Enter stock ticker symbols (comma-separated)", "AAPL,TSLA,GOOGL")
@@ -77,8 +74,17 @@ tickers = [ticker.strip().upper() for ticker in tickers.split(",")]
 
 # "Analyze" button to trigger stock tracking
 if st.button("🔍 Analyze"):
+    sentiments = get_market_sentiment(tickers)
+    
+    # Display sentiment info in the sidebar only if it exists
     for ticker in tickers:
-            
+        if ticker in sentiments and sentiments[ticker] != "⚠️ Rate limit reached. Try again later.":
+            st.sidebar.subheader(f"📢 Sentiment for {ticker}")
+            st.sidebar.write(sentiments[ticker])
+        elif ticker in sentiments:
+            st.sidebar.subheader(f"📢 Sentiment for {ticker}")
+            st.sidebar.write(sentiments[ticker])
+
         st.subheader(f"📊 Stock Data for {ticker}")
 
         # Fetch stock data
@@ -98,13 +104,6 @@ if st.button("🔍 Analyze"):
         fig.add_trace(go.Scatter(x=sell_signals.index, y=sell_signals["Close"], mode="markers", name="Sell Signal", marker=dict(color="red", size=10)))
 
         st.plotly_chart(fig)
-
-        # Fetch market sentiment (reduces API calls)
-        #sentiment = get_market_sentiment(ticker)
-        #st.write(f"📢 **Market Sentiment for {ticker}:** {sentiment}")
-        sentiments = get_market_sentiment(ticker)
-        if ticker in sentiments:
-            st.sidebar.write(sentiments[ticker])
 
     # Auto-refresh logic
     st.success("✅ Stock data updates every 5 minutes!")
