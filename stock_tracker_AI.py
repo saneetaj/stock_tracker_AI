@@ -11,6 +11,7 @@ import requests
 import feedparser
 import logging
 import re
+import playwright
 
 # Load OpenAI API key from Streamlit secrets
 openai_api_key = st.secrets["openai_api_key"]
@@ -90,6 +91,9 @@ def get_stock_news(ticker):
 
 from playwright.sync_api import sync_playwright
 
+with sync_playwright() as p:
+    p.install()  # This will install the necessary browser binaries (Chromium, Firefox, Webkit)
+    
 def get_stock_news(ticker):
     url = f"https://news.google.com/search?q={ticker}&hl=en-US&gl=US&ceid=US:en"
     
