@@ -39,7 +39,6 @@ def generate_signals(data):
     return data
 
 # Function to fetch stock news
-'''
 # Configure logging
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -87,50 +86,6 @@ def get_stock_news(ticker):
             return error_message
 
     return "\n".join(news_articles)
-'''
-
-from playwright.sync_api import sync_playwright
-
-with sync_playwright() as p:
-    p.install()  # This will install the necessary browser binaries (Chromium, Firefox, Webkit)
-    
-def get_stock_news(ticker):
-    url = f"https://news.google.com/search?q={ticker}&hl=en-US&gl=US&ceid=US:en"
-    
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(url)
-
-        # Give the page some time to load
-        page.wait_for_timeout(3000)  # 3 seconds
-
-        # Parse page source with BeautifulSoup
-        soup = BeautifulSoup(page.content(), "html.parser")
-        articles = soup.find_all("article", {"class": "MQsxUd"})
-        articles = articles[:3]  # Limit to top 3
-
-        if not articles:
-            browser.close()
-            return f"No recent news found for {ticker} on Google News."
-
-        news_articles = []
-        for article in articles:
-            try:
-                title_tag = article.find("h3")
-                link_tag = article.find("a", {"class": "DYR6b"})
-                if title_tag and link_tag:
-                    title = title_tag.text.strip()
-                    link = "https://news.google.com" + link_tag['href']
-                    news_articles.append(f"• {title}: {link}")
-                else:
-                    print(f"Skipping article with missing title or link: {article}")
-            except Exception as e:
-                print(f"Error processing article for {ticker}: {e}")
-
-        browser.close()  # Close Playwright browser
-        return "\n".join(news_articles)
-
 
 # Function to fetch market sentiment using OpenAI
 def get_market_sentiment(tickers):
