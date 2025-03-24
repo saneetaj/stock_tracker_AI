@@ -9,3 +9,4 @@ plotly
 requests
 feedparser
 yahooquery
+logging
