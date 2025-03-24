@@ -11,4 +11,4 @@ feedparser
 yahooquery
 logging
 selenium
-webdriver_manager.chrome
+webdriver_manager
