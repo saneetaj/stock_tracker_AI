@@ -63,7 +63,7 @@ def get_market_sentiment(tickers):
             except Exception as e:
                 sentiments[ticker] = f"⚠️ Error: {e}"
                 break
-        time.sleep(2)  # Small delay between tickers
+        time.sleep(1)  # Small delay between tickers
  
     return sentiments
     
