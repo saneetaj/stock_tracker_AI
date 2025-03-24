@@ -51,7 +51,8 @@ def get_stock_news(ticker):
         error_message = f"⚠️ Could not fetch news for {ticker} from Google News: {e}"
         logging.error(error_message)
         return error_message
-
+     # Print the first 500 characters of the response to check if we're getting data
+    st.sidebar.write(response.text[:500])  # Debug: print first 500 chars of the response
     try:
         soup = BeautifulSoup(response.text, "html.parser")
         # Find all article containers. Google News structure can change, so this might need adjustment.
