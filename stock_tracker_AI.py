@@ -39,24 +39,42 @@ def generate_signals(data):
     data["Sell_Signal"] = (data["Close"] < data["SMA_20"]) & (data["RSI"] > 70)
     return data
 
-# Function to fetch market sentiment using OpenAI (optimized for rate limits)
+# Function to fetch stock news from Yahoo Finance
+def get_stock_news(ticker):
+    stock = yf.Ticker(ticker)
+    news = getattr(stock, "news", [])  # Prevents AttributeError
+    if not news:
+        return "No recent news found."
+    
+    # Extract top 3 headlines and URLs
+    news_articles = [f"{article['title']} - {article['link']}" for article in news[:3]]
+    return "\n".join(news_articles)
+
+# Function to fetch market sentiment using OpenAI
 def get_market_sentiment(tickers):
     sentiments = {}
     rate_limit_error_flag = False  # Flag to track if rate limit error has occurred
 
     for ticker in tickers:
+        news_data = get_stock_news(ticker)  # Fetch news for each ticker
         attempt = 1
+
         while attempt <= 5:  # Retry up to 5 times
             try:
-                prompt = f"Analyze the market sentiment for {ticker}. Provide a short summary (bullish, bearish, or neutral) with key reasons."
+                prompt = f"Analyze the market sentiment for {ticker} in the following news:\n{news_data}\nProvide a short summary (bullish, bearish, or neutral) with key reasons."
+
                 response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",  # Use the correct model name
-                    prompt=prompt,
-                    max_tokens=20
+                    model="gpt-4-turbo",  # Ensure the correct model
+                    messages=[
+                        {"role": "system", "content": "You are a financial news analyst."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=50
                 )
-                sentiments[ticker] = response['choices'][0]['text'].strip()  # Fetch the text from the response
+                sentiments[ticker] = response.choices[0].message.content.strip()
                 break  # Exit retry loop if successful
-            except Exception as e:  # Catch all exceptions (no more `openai.error` needed)
+
+            except openai.OpenAIError as e:  # Catch OpenAI API errors
                 if not rate_limit_error_flag:
                     sentiments['error'] = "⚠️ Rate limit reached. Try again later."
                     rate_limit_error_flag = True  # Only show the error once
