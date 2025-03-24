@@ -10,7 +10,8 @@ import plotly.graph_objects as go
 openai_api_key = st.secrets["openai_api_key"]
 
 # Initialize OpenAI client
-openai.api_key = openai_api_key
+# openai.api_key = openai_api_key
+openai.api_key = "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"
 
 # Function to fetch stock data
 def get_stock_data(ticker):
