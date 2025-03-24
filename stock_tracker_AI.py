@@ -11,15 +11,16 @@ openai_api_key = st.secrets["openai_api_key"]
 
 # Initialize OpenAI client
 openai.api_key = openai_api_key
-#st.write(f"API Key Loaded: {openai_api_key[:5]}********")
+client = openai.OpenAI(api_key=openai_api_key)
 
+'''
 response = openai.ChatCompletion.create(
     model="gpt-3.5-turbo",
     messages=[{"role": "user", "content": "Hello, how's the market today?"}],
     max_tokens=50
 )
-
 print(response)
+'''
 
 # Function to fetch stock data
 def get_stock_data(ticker):
@@ -49,7 +50,7 @@ def get_market_sentiment(tickers):
         while attempt <= 5:  # Retry up to 5 times
             try:
                 prompt = f"Analyze the market sentiment for {ticker}. Provide a short summary (bullish, bearish, or neutral) with key reasons."
-                response = openai.ChatCompletion.create(
+                response = client.chat.completions.create(
                     model="gpt-3.5-turbo",  # Use the correct model name
                     prompt=prompt,
                     max_tokens=20
