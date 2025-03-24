@@ -47,19 +47,24 @@ def get_market_sentiment(tickers):
                     model="gpt-3.5-turbo",
                     messages=[{"role": "user", "content": prompt}]
                 )
+                # Log response headers to check rate limit status
+                print(f"Response Headers for {ticker}: {response.headers}")
                 sentiments[ticker] = response.choices[0].message.content
                 break  # Exit retry loop if successful
             except openai.RateLimitError:
                 if attempt < 5:
                     wait_time = 2 ** attempt  # Exponential backoff
+                    print(f"Rate limit error for {ticker}, retrying after {wait_time} seconds...")
                     time.sleep(wait_time)
                     attempt += 1
                 else:
                     sentiments[ticker] = "⚠️ Rate limit reached. Try again later."
                     break
-        
+            except Exception as e:
+                sentiments[ticker] = f"⚠️ Error: {e}"
+                break
         time.sleep(2)  # Small delay between tickers
-    
+ 
     return sentiments
     
 # Streamlit UI
