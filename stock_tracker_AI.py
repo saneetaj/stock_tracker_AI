@@ -43,15 +43,6 @@ logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %
 
 
 def get_stock_news(ticker):
-    """
-    Fetches the top 3 news articles for a given stock ticker from Google News.
-
-    Args:
-        ticker (str): The stock ticker symbol (e.g., "AAPL").
-
-    Returns:
-        str: A string containing the formatted news articles, or an error message.
-    """
     url = f"https://news.google.com/search?q={ticker}&hl=en-US&gl=US&ceid=US:en"
     headers = {"User-Agent": "Mozilla/5.0"}  # Prevent blocking
     try:
