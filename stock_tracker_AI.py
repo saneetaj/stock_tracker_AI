@@ -42,7 +42,7 @@ def generate_signals(data):
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-get_stock_news(ticker):
+def get_stock_news(ticker):
     """
     Fetches the top 3 news articles for a given stock ticker from Google News.
 
