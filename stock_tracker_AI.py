@@ -40,13 +40,14 @@ def get_market_sentiment(tickers):
         while attempt <= 5:  # Retry up to 5 times
             try:
                 prompt = f"Analyze the market sentiment for {ticker}. Provide a short summary (bullish, bearish, or neutral) with key reasons."
-                response = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
-                    messages=[{"role": "user", "content": prompt}]
+                response = openai.Completion.create(
+                    model="gpt-3.5-turbo",  # Use the correct model name
+                    prompt=prompt,
+                    max_tokens=100
                 )
-                sentiments[ticker] = response.choices[0].message.content
+                sentiments[ticker] = response['choices'][0]['text'].strip()  # Fetch the text from the response
                 break  # Exit retry loop if successful
-            except openai.RateLimitError:
+            except openai.error.RateLimitError:
                 if not rate_limit_error_flag:
                     sentiments['error'] = "⚠️ Rate limit reached. Try again later."
                     rate_limit_error_flag = True  # Only show the error once
