@@ -47,7 +47,7 @@ def get_market_sentiment(tickers):
                 )
                 sentiments[ticker] = response['choices'][0]['text'].strip()  # Fetch the text from the response
                 break  # Exit retry loop if successful
-            except openai.OpenAIError:  # Catching all OpenAI related errors
+            except openai.error.RateLimitError as e:  # Catch RateLimitError specifically
                 if not rate_limit_error_flag:
                     sentiments['error'] = "⚠️ Rate limit reached. Try again later."
                     rate_limit_error_flag = True  # Only show the error once
@@ -58,11 +58,14 @@ def get_market_sentiment(tickers):
                 else:
                     sentiments[ticker] = "⚠️ Rate limit reached. Try again later."
                     break
-            except Exception as e:
-                sentiments[ticker] = f"⚠️ Error: {e}"
+            except openai.OpenAIError as e:  # Catch all OpenAI related errors
+                sentiments[ticker] = f"⚠️ OpenAI error: {str(e)}"
+                break
+            except Exception as e:  # Catch any other errors
+                sentiments[ticker] = f"⚠️ Error: {str(e)}"
                 break
 
-        time.sleep(2)  # Small delay between tickers
+        time.sleep(3)  # Longer delay between requests to avoid hitting rate limits
     
     return sentiments
 
