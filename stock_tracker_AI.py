@@ -7,6 +7,8 @@ import time
 import plotly.graph_objects as go
 import requests
 from bs4 import BeautifulSoup
+import requests
+import feedparser
 
 # Load OpenAI API key from Streamlit secrets
 openai_api_key = st.secrets["openai_api_key"]
@@ -33,41 +35,47 @@ def generate_signals(data):
     data["Sell_Signal"] = (data["Close"] < data["SMA_20"]) & (data["RSI"] > 70)
     return data
 
-# Function to fetch stock news from Yahoo Finance
-import requests
-import feedparser
-
 # Function to fetch stock news from Yahoo
 import requests
 from bs4 import BeautifulSoup
 
-# Function to fetch stock news from Yahoo
 def get_stock_news(ticker):
+    """
+    Fetches the top 3 news articles for a given stock ticker from Yahoo Finance.
+
+    Args:
+        ticker (str): The stock ticker symbol (e.g., "AAPL").
+
+    Returns:
+        str: A string containing the formatted news articles, or an error message.
+    """
     url = f"https://finance.yahoo.com/quote/{ticker}/news"
     headers = {"User-Agent": "Mozilla/5.0"}  # Prevent blocking
-    response = requests.get(url, headers=headers)
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+    except requests.exceptions.RequestException as e:
+        return f"⚠️ Could not fetch news for {ticker}: {e}"
 
-    if response.status_code != 200:
-        return f"⚠️ Could not fetch news for {ticker}."
-
-    soup = BeautifulSoup(response.text, "html.parser")
-
-    # Debugging: Print the first 500 characters of the HTML to check structure
-    print(soup.prettify()[:500])
-
-    # Attempt to find articles with the proper class
-    articles = soup.find_all("li", class_="js-stream-content", limit=3)
+    try:
+        soup = BeautifulSoup(response.text, "html.parser")
+        articles = soup.find_all("li", class_="js-stream-content", limit=3)  # Get top 3 articles
+    except Exception as e:
+        return f"⚠️ Error parsing HTML for {ticker}: {e}"
 
     if not articles:
         return f"No recent news found for {ticker}."
 
     news_articles = []
     for article in articles:
-        title_tag = article.find("h3")
-        if title_tag and title_tag.a:
-            title = title_tag.text.strip()
-            link = f"https://finance.yahoo.com{title_tag.a['href']}"
-            news_articles.append(f"{title} - {link}")
+        try:
+            title_tag = article.find("h3")
+            if title_tag and title_tag.a:
+                title = title_tag.text.strip()
+                link = f"https://finance.yahoo.com{title_tag.a['href']}"
+                news_articles.append(f"• {title}: {link}")  # Improved formatting
+        except Exception as e:
+            return f"⚠️ Error processing article for {ticker}: {e}" # error for individual articles
 
     return "\n".join(news_articles)
 
