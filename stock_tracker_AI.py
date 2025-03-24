@@ -1,79 +1,81 @@
 import streamlit as st
+import openai
 import yfinance as yf
 import pandas as pd
-import ta
-import openai
 import time
-from datetime import datetime
+import datetime
 import plotly.graph_objects as go
 
-# Set OpenAI API Key
-openai.api_key = st.secrets["openai_api_key"]
+# Load API key securely from Streamlit secrets
+openai_api_key = st.secrets["openai_api_key"]
+
+# Initialize OpenAI client
+client = openai.OpenAI(api_key=openai_api_key)
 
 # Function to fetch stock data
-def get_stock_data(ticker, period="1y", interval="1d"):
+def get_stock_data(ticker):
     stock = yf.Ticker(ticker)
-    df = stock.history(period=period, interval=interval)
-    return df
+    data = stock.history(period="1mo", interval="1d")  # 1 month historical data
+    return data
 
 # Function to calculate technical indicators
-def add_technical_indicators(df):
-    if df.empty:
-        return df
-    df["EMA_20"] = ta.trend.ema_indicator(df["Close"], window=20)
-    df["RSI"] = ta.momentum.rsi(df["Close"], window=14)
-    df["MACD"] = ta.trend.macd(df["Close"])
-    df["MACD_Signal"] = ta.trend.macd_signal(df["Close"])
-    df["ADX"] = ta.trend.adx(df["High"], df["Low"], df["Close"])
-    return df
-
-# Function to analyze market sentiment using OpenAI
-def get_market_sentiment(ticker):
-    prompt = f"""Analyze the latest financial news, blogs, and forums about {ticker}. Summarize the market sentiment in 200-300 words and classify it as Buy, Sell, or Neutral."""
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "system", "content": "You are a financial analyst."},
-                  {"role": "user", "content": prompt}]
-    )
-    return response["choices"][0]["message"]["content"].strip()
+def calculate_indicators(data):
+    data["SMA_20"] = data["Close"].rolling(window=20).mean()
+    data["RSI"] = 100 - (100 / (1 + data["Close"].pct_change().rolling(window=14).mean()))
+    return data
 
 # Function to generate buy/sell signals
-def generate_signals(df, sentiment):
-    df["Buy_Signal"] = (df["RSI"] < 30) & (df["MACD"] > df["MACD_Signal"]) & (df["ADX"] > 25)
-    df["Sell_Signal"] = (df["RSI"] > 70) & (df["MACD"] < df["MACD_Signal"]) & (df["ADX"] > 25)
-    sentiment_signal = "Buy" if "Buy" in sentiment else "Sell" if "Sell" in sentiment else "Neutral"
-    return df, sentiment_signal
+def generate_signals(data):
+    data["Buy_Signal"] = (data["Close"] > data["SMA_20"]) & (data["RSI"] < 30)
+    data["Sell_Signal"] = (data["Close"] < data["SMA_20"]) & (data["RSI"] > 70)
+    return data
+
+# Function to fetch market sentiment using OpenAI
+def get_market_sentiment(ticker):
+    prompt = f"Analyze the market sentiment for {ticker}. Provide a short summary (bullish, bearish, or neutral) with key reasons."
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response.choices[0].message.content
 
 # Streamlit UI
-st.title("📈 Multi-Stock Tracker with AI Market Sentiment")
+st.title("📈 AI-Powered Stock Tracker")
 
-tickers = st.text_input("Enter Stock Tickers (comma-separated, e.g., AAPL, TSLA, MSFT):", "AAPL,TSLA,MSFT")
-tickers_list = [ticker.strip().upper() for ticker in tickers.split(",")]
+# User input for multiple stock tickers
+tickers = st.text_input("Enter stock ticker symbols (comma-separated)", "AAPL,TSLA,GOOGL")
+tickers = [ticker.strip().upper() for ticker in tickers.split(",")]
 
-if st.button("Analyze"):
-    for ticker in tickers_list:
-        df = get_stock_data(ticker)
-        df = add_technical_indicators(df)
-        sentiment = get_market_sentiment(ticker)
-        df, sentiment_signal = generate_signals(df, sentiment)
+# Refresh interval (5 minutes)
+refresh_time = 300
 
-        # Plot stock chart
-        fig = go.Figure()
-        fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'],
-                                     low=df['Low'], close=df['Close'], name="Candlesticks"))
-        st.subheader(f"Stock: {ticker}")
-        st.plotly_chart(fig)
+# Live stock tracking
+for ticker in tickers:
+    st.subheader(f"📊 Stock Data for {ticker}")
+    
+    # Fetch stock data
+    data = get_stock_data(ticker)
+    data = calculate_indicators(data)
+    data = generate_signals(data)
+    
+    # Plot stock price chart
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=data.index, y=data["Close"], mode="lines", name="Close Price"))
+    fig.add_trace(go.Scatter(x=data.index, y=data["SMA_20"], mode="lines", name="20-Day SMA"))
+    
+    # Highlight Buy/Sell Signals
+    buy_signals = data[data["Buy_Signal"]]
+    sell_signals = data[data["Sell_Signal"]]
+    fig.add_trace(go.Scatter(x=buy_signals.index, y=buy_signals["Close"], mode="markers", name="Buy Signal", marker=dict(color="green", size=10)))
+    fig.add_trace(go.Scatter(x=sell_signals.index, y=sell_signals["Close"], mode="markers", name="Sell Signal", marker=dict(color="red", size=10)))
 
-        # Display signals and sentiment
-        latest_price = df['Close'].iloc[-1]
-        if df["Buy_Signal"].iloc[-1]:
-            st.write(f"🔹 **Buy Signal** at ${latest_price:.2f}")
-        elif df["Sell_Signal"].iloc[-1]:
-            st.write(f"🔻 **Sell Signal** at ${latest_price:.2f}")
-        else:
-            st.write("⚪ **No Strong Signal**")
+    st.plotly_chart(fig)
+    
+    # Market sentiment
+    sentiment = get_market_sentiment(ticker)
+    st.write(f"📢 **Market Sentiment for {ticker}:** {sentiment}")
 
-        st.write(f"**Market Sentiment:** {sentiment_signal}")
-        st.text(sentiment)
+    # Auto-refresh
+    time.sleep(refresh_time)
 
-        time.sleep(1)
+st.success("✅ Stock data updates every 5 minutes!")
