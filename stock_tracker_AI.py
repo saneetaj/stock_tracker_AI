@@ -19,20 +19,14 @@ finnhub_client = finnhub.Client(api_key=finnhub_api_key)
 
 # Function to fetch stock data from Finnhub
 def get_stock_data(ticker):
-    try:
-        # Fetch historical data for the past month (30 days)
-        data = finnhub_client.stock_candles(ticker, 'D', int((datetime.datetime.now() - datetime.timedelta(days=30)).timestamp()), int(datetime.datetime.now().timestamp()))
-        if data['s'] != 'ok':
-            return pd.DataFrame()  # Return empty dataframe if the request fails
-        df = pd.DataFrame(data)
-        df['t'] = pd.to_datetime(df['t'], unit='s')
-        df.set_index('t', inplace=True)
-        df = df[['c', 'h', 'l', 'o', 'v']]  # Select close, high, low, open, volume columns
-        df.columns = ['Close', 'High', 'Low', 'Open', 'Volume']
-        return df
-    except Exception as e:
-        logging.error(f"Error fetching stock data for {ticker}: {e}")
-        return pd.DataFrame()
+    url = f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={finnhub_api_key}"
+    response = requests.get(url)
+    data = response.json()
+
+    if response.status_code == 200 and 'c' in data:
+        return data
+    else:
+        return None
 
 # Function to calculate technical indicators
 def calculate_indicators(data):
@@ -46,21 +40,20 @@ def generate_signals(data):
     data["Sell_Signal"] = (data["Close"] < data["SMA_20"]) & (data["RSI"] > 70)
     return data
 
-# Function to fetch stock news from Finnhub
 def get_stock_news(ticker):
-    try:
-        news = finnhub_client.company_news(ticker, _from=datetime.datetime.now() - datetime.timedelta(days=7), to=datetime.datetime.now())
-        if not news:
-            return f"No recent news found for {ticker}."
+    url = f"https://finnhub.io/api/v1/company-news?symbol={ticker}&from=2025-03-01&to=2025-03-24&token={finnhub_api_key}"
+    response = requests.get(url)
+    data = response.json()
+
+    if response.status_code == 200 and data:
         news_articles = []
-        for article in news[:3]:  # Limit to top 3 articles
+        for article in data[:3]:  # Limit to top 3 articles
             title = article['headline']
             url = article['url']
             news_articles.append(f"• {title}: {url}")
         return "\n".join(news_articles)
-    except Exception as e:
-        logging.error(f"Error fetching news for {ticker}: {e}")
-        return f"⚠️ Could not fetch news for {ticker}."
+    else:
+        return f"⚠️ No news available for {ticker}."
 
 # Function to fetch market sentiment using OpenAI
 def get_market_sentiment(tickers):
