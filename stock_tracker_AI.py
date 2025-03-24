@@ -88,55 +88,44 @@ def get_stock_news(ticker):
     return "\n".join(news_articles)
 '''
 
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from webdriver_manager.chrome import ChromeDriverManager
+from playwright.sync_api import sync_playwright
 
-# Function to fetch stock news using Selenium
 def get_stock_news(ticker):
     url = f"https://news.google.com/search?q={ticker}&hl=en-US&gl=US&ceid=US:en"
     
-    # Set up Chrome options
-    options = webdriver.ChromeOptions()
-    options.add_argument("--headless")  # Run headlessly without opening the browser window
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    
-    # Initialize WebDriver
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-    driver.get(url)
-    
-    # Wait for JavaScript to render the page (adjust time as needed)
-    time.sleep(3)  # Wait for 3 seconds to allow JavaScript to load
-    
-    # Now parse the page source with BeautifulSoup
-    soup = BeautifulSoup(driver.page_source, "html.parser")
-    
-    # Find all articles (adjust selector if necessary)
-    articles = soup.find_all("article", {"class": "MQsxUd"})
-    articles = articles[:3]  # Limit to top 3
-    
-    if not articles:
-        driver.quit()
-        return f"No recent news found for {ticker} on Google News."
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(url)
 
-    news_articles = []
-    for article in articles:
-        try:
-            title_tag = article.find("h3")
-            link_tag = article.find("a", {"class": "DYR6b"})
-            if title_tag and link_tag:
-                title = title_tag.text.strip()
-                link = "https://news.google.com" + link_tag['href']
-                news_articles.append(f"• {title}: {link}")
-            else:
-                print(f"Skipping article with missing title or link: {article}")
-        except Exception as e:
-            print(f"Error processing article for {ticker}: {e}")
-    
-    driver.quit()  # Close the browser session
-    return "\n".join(news_articles)
+        # Give the page some time to load
+        page.wait_for_timeout(3000)  # 3 seconds
+
+        # Parse page source with BeautifulSoup
+        soup = BeautifulSoup(page.content(), "html.parser")
+        articles = soup.find_all("article", {"class": "MQsxUd"})
+        articles = articles[:3]  # Limit to top 3
+
+        if not articles:
+            browser.close()
+            return f"No recent news found for {ticker} on Google News."
+
+        news_articles = []
+        for article in articles:
+            try:
+                title_tag = article.find("h3")
+                link_tag = article.find("a", {"class": "DYR6b"})
+                if title_tag and link_tag:
+                    title = title_tag.text.strip()
+                    link = "https://news.google.com" + link_tag['href']
+                    news_articles.append(f"• {title}: {link}")
+                else:
+                    print(f"Skipping article with missing title or link: {article}")
+            except Exception as e:
+                print(f"Error processing article for {ticker}: {e}")
+
+        browser.close()  # Close Playwright browser
+        return "\n".join(news_articles)
 
 
 # Function to fetch market sentiment using OpenAI
