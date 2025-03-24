@@ -8,3 +8,4 @@ beautifulsoup4
 plotly
 requests
 feedparser
+yahooquery
