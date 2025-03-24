@@ -50,7 +50,7 @@ def get_intraday_data(ticker):
             return get_stock_data(ticker)  # Return the latest available data
         return data
     elif 'error' in data:  # Handle error response
-        st.write(f"⚠️ Error fetching intraday data for {ticker}: {data['error']}.\nMarkets might be closed and/or paid version of finnhub needed.")
+        st.write(f"⚠️ Error fetching intraday data for {ticker}: {data['error']}\nMarkets might be closed and/or paid version of Finnhub required.")
         # Fetch the latest available historical data if intraday data is not accessible
         return get_stock_data(ticker)
     else:
