@@ -153,6 +153,62 @@ def combine_signals(data):
     )
 
     return data
+# Function to fetch stock news from Finnhub
+def get_stock_news(ticker):
+    url = f"https://finnhub.io/api/v1/company-news?symbol={ticker}&from=2025-03-01&to=2025-03-24&token={finnhub_api_key}"
+    response = requests.get(url)
+    data = response.json()
+
+    if response.status_code == 200 and data:
+        news_articles = []
+        for article in data[:3]:  # Limit to top 3 articles
+            title = article['headline']
+            url = article['url']
+            news_articles.append(f"• {title}: {url}")
+        return "\n".join(news_articles)
+    else:
+        return f"⚠️ No news available for {ticker}."
+
+# Function to fetch market sentiment using OpenAI
+def get_market_sentiment(tickers):
+    sentiments = {}
+    rate_limit_error_flag = False
+
+    for ticker in tickers:
+        news_data = get_stock_news(ticker)
+        st.sidebar.write(news_data)
+        attempt = 1
+
+        while attempt <= 5:
+            try:
+                prompt = f"Analyze the market sentiment for {ticker} in the below news. :\n{news_data}\nProvide a brief summary (bullish, bearish, or neutral) with key reasons. Strictly limit the summary to 250 words max."
+
+                response = client.chat.completions.create(
+                    model="gpt-3.5-turbo", 
+                    messages=[
+                        {"role": "system", "content": "You are a financial news analyst."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=400
+                )
+                sentiments[ticker] = response.choices[0].message.content.strip()
+                break
+
+            except openai.OpenAIError as e:
+                if not rate_limit_error_flag:
+                    sentiments['error'] = "⚠️ Rate limit reached. Try again later."
+                    rate_limit_error_flag = True
+                if attempt < 5:
+                    wait_time = 2 ** attempt
+                    time.sleep(wait_time)
+                    attempt += 1
+                else:
+                    sentiments[ticker] = "⚠️ Rate limit reached. Try again later."
+                    break
+
+        time.sleep(2)
+
+    return sentiments
 
     
 # Streamlit UI
@@ -165,6 +221,13 @@ tickers = [ticker.strip().upper() for ticker in tickers.split(",")]
 # "Analyze" button to trigger stock tracking
 if st.button("🔍 Analyze"):
     for ticker in tickers:
+        if ticker in sentiments and sentiments[ticker] != "⚠️ Rate limit reached. Try again later.":
+            st.sidebar.subheader(f"📢 Sentiment for {ticker}")
+            st.sidebar.write(sentiments[ticker])
+        elif ticker in sentiments:
+            st.sidebar.subheader(f"📢 Sentiment for {ticker}")
+            st.sidebar.write(sentiments[ticker])
+            
         st.subheader(f"📊 Stock Data for {ticker}")
 
         # Fetch stock data
