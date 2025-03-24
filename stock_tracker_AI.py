@@ -138,10 +138,6 @@ def get_stock_news(ticker):
     driver.quit()  # Close the browser session
     return "\n".join(news_articles)
 
-# Example usage:
-ticker = "AAPL"
-print(get_stock_news(ticker))
-
 
 # Function to fetch market sentiment using OpenAI
 def get_market_sentiment(tickers):
