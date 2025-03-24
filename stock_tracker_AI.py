@@ -38,11 +38,16 @@ def generate_signals(data):
 
 # Function to fetch stock news from Yahoo
 # Configure logging
+import requests
+from bs4 import BeautifulSoup
+import logging
+
+# Configure logging
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def get_stock_news(ticker):
     """
-    Fetches the top 3 news articles for a given stock ticker from Yahoo Finance.
+    Fetches the top 3 news articles for a given stock ticker from Google News.
 
     Args:
         ticker (str): The stock ticker symbol (e.g., "AAPL").
@@ -50,26 +55,28 @@ def get_stock_news(ticker):
     Returns:
         str: A string containing the formatted news articles, or an error message.
     """
-    url = f"https://finance.yahoo.com/quote/{ticker}/news"
+    url = f"https://news.google.com/search?q={ticker}&hl=en-US&gl=US&ceid=US:en"
     headers = {"User-Agent": "Mozilla/5.0"}  # Prevent blocking
     try:
         response = requests.get(url, headers=headers)
         response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
     except requests.exceptions.RequestException as e:
-        error_message = f"⚠️ Could not fetch news for {ticker}: {e}"
-        logging.error(error_message)  # Log the error
+        error_message = f"⚠️ Could not fetch news for {ticker} from Google News: {e}"
+        logging.error(error_message)
         return error_message
 
     try:
         soup = BeautifulSoup(response.text, "html.parser")
-        articles = soup.find_all("li", class_="js-stream-content", limit=3)  # Get top 3 articles
+        # Find all article containers.  Google News structure can change, so this might need adjustment.
+        articles = soup.find_all("article", {"class": "MQsxUd"}) # This class name is what I found on 2024-02-08
+        articles = articles[:3] # limit to top 3
     except Exception as e:
-        error_message = f"⚠️ Error parsing HTML for {ticker}: {e}"
-        logging.error(error_message)  # Log the error
+        error_message = f"⚠️ Error parsing HTML from Google News for {ticker}: {e}"
+        logging.error(error_message)
         return error_message
 
     if not articles:
-        error_message = f"No recent news found for {ticker}."
+        error_message = f"No recent news found for {ticker} on Google News."
         logging.warning(error_message)
         return error_message
 
@@ -77,19 +84,19 @@ def get_stock_news(ticker):
     for article in articles:
         try:
             title_tag = article.find("h3")
-            if title_tag and title_tag.a:
+            link_tag = article.find("a", {"class": "DYR6b"}) # changed from 'title_tag.a'
+            if title_tag and link_tag:
                 title = title_tag.text.strip()
-                link = f"https://finance.yahoo.com{title_tag.a['href']}"
-                news_articles.append(f"• {title}: {link}")  # Improved formatting
+                link = "https://news.google.com" + link_tag['href']
+                news_articles.append(f"• {title}: {link}")
             else:
                 logging.warning(f"Skipping article with missing title or link: {article}")
         except Exception as e:
-            error_message = f"⚠️ Error processing article for {ticker}: {e}"
-            logging.error(error_message)  # Log the error
+            error_message = f"⚠️ Error processing article for {ticker} from Google News: {e}"
+            logging.error(error_message)
             return error_message
 
     return "\n".join(news_articles)
-
 
 
 # Function to fetch market sentiment using OpenAI
