@@ -1,0 +1,10 @@
+streamlit
+yfinance
+pandas
+numpy
+ta==0.10.2
+requests
+bs4
+BeautifulSoup
+plotly.graph_objects
+openai
