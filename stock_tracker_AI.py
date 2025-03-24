@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 import requests
 import feedparser
 import logging
+import re
 
 # Load OpenAI API key from Streamlit secrets
 openai_api_key = st.secrets["openai_api_key"]
@@ -62,9 +63,17 @@ def get_stock_news(ticker):
 
     try:
         soup = BeautifulSoup(response.text, "html.parser")
-        # Find all article containers.  Google News structure can change, so this might need adjustment.
-        articles = soup.find_all("article", {"class": "MQsxUd"}) # This class name is what I found on 2024-02-08
-        articles = articles[:3] # limit to top 3
+        # 1. Attempt to find articles using a more general selector.
+        articles = soup.find_all("article")
+        if not articles:
+            # 2. If the general selector doesn't work, use a more specific one (the one from the previous version).
+            articles = soup.find_all("article", {"class": "MQsxUd"})  # This class name was found on 2024-02-08
+            if not articles:
+                error_message = f"⚠️ No articles found using primary or secondary selectors for {ticker} on Google News."
+                logging.error(error_message)
+                return error_message
+
+        articles = articles[:3]  # limit to top 3
     except Exception as e:
         error_message = f"⚠️ Error parsing HTML from Google News for {ticker}: {e}"
         logging.error(error_message)
@@ -79,10 +88,13 @@ def get_stock_news(ticker):
     for article in articles:
         try:
             title_tag = article.find("h3")
-            link_tag = article.find("a", {"class": "DYR6b"}) # changed from 'title_tag.a'
+            link_tag = article.find("a", {"class": "DYR6b"})  # changed from 'title_tag.a'
+            if not link_tag:
+                link_tag = article.find("a", href=re.compile("^./[a-zA-Z0-9_-]+"))
             if title_tag and link_tag:
                 title = title_tag.text.strip()
-                link = "https://news.google.com" + link_tag['href']
+                link = "https://news.google.com" + link_tag['href'] if link_tag['href'].startswith(
+                    "./") else link_tag['href']
                 news_articles.append(f"• {title}: {link}")
             else:
                 logging.warning(f"Skipping article with missing title or link: {article}")
@@ -92,6 +104,7 @@ def get_stock_news(ticker):
             return error_message
 
     return "\n".join(news_articles)
+
 
 
 # Function to fetch market sentiment using OpenAI
