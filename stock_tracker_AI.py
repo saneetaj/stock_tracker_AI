@@ -35,7 +35,7 @@ def get_market_sentiment(ticker):
     try:
         prompt = f"Analyze the market sentiment for {ticker}. Provide a short summary (bullish, bearish, or neutral) with key reasons."
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}]
         )
         return response.choices[0].message.content
