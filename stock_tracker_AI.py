@@ -41,11 +41,11 @@ def get_stock_news(ticker):
     response = requests.get(url)
     
     if response.status_code != 200:
-        return "⚠️ Could not fetch news on {ticker}. Please try again later."
+        return f"⚠️ Could not fetch news on {ticker}. Please try again later."
     
     feed = feedparser.parse(response.text)  # Parse RSS feed
     if not feed.entries:
-        return "No recent news found on {ticker}."
+        return f"No recent news found on {ticker}."
 
     # Extract top 3 news articles
     news_articles = [
