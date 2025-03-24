@@ -36,20 +36,18 @@ import requests
 import feedparser
 
 # Function to fetch stock news from Yahoo Finance RSS
+from yahooquery import Ticker
+
 def get_stock_news(ticker):
-    url = f"https://finance.yahoo.com/rss/headline?s={ticker}"  # Yahoo Finance RSS feed
-    response = requests.get(url)
-    
-    if response.status_code != 200:
-        return f"⚠️ Could not fetch news on {ticker}. Please try again later."
-    
-    feed = feedparser.parse(response.text)  # Parse RSS feed
-    if not feed.entries:
+    stock = Ticker(ticker)
+    news = stock.news()  # Fetch news
+
+    if not news:
         return f"No recent news found on {ticker}."
 
     # Extract top 3 news articles
     news_articles = [
-        f"{entry.title} - {entry.link}" for entry in feed.entries[:3]
+        f"{article['title']} - {article['link']}" for article in news[:3]
     ]
     
     return "\n".join(news_articles)
