@@ -6,3 +6,5 @@ ta
 requests
 beautifulsoup4
 plotly
+requests
+feedparser
