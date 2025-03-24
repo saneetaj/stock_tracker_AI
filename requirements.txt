@@ -10,7 +10,5 @@ requests
 feedparser
 yahooquery
 logging
-selenium
-webdriver_manager
-playwright
 finnhub
+finnhub-python
