@@ -18,7 +18,7 @@ client = openai.OpenAI(api_key=openai_api_key)
 # Initialize Finnhub client
 finnhub_client = finnhub.Client(api_key=finnhub_api_key)
 
-# Function to fetch stock data from Finnhub (for the latest close price)
+# Function to fetch stock data from Finnhub (latest available data)
 def get_stock_data(ticker):
     url = f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={finnhub_api_key}"
     response = requests.get(url)
@@ -29,7 +29,7 @@ def get_stock_data(ticker):
     else:
         return None
 
-# Function to fetch intraday data (1-minute resolution) for buy/sell signals during market hours
+# Function to get intraday stock data (last available data when markets are closed)
 def get_intraday_data(ticker):
     now = datetime.datetime.now()
     start_time = int((now - datetime.timedelta(days=1)).timestamp())  # Yesterday's timestamp
@@ -41,17 +41,22 @@ def get_intraday_data(ticker):
     data = response.json()
 
     if response.status_code == 200 and 'c' in data:
+        if not data['c']:  # Check if the 'close' prices are empty
+            st.write(f"No intraday data available for {ticker}. Market might be closed.")
+            # Fetch the latest available historical data
+            return get_stock_data(ticker)  # Return the latest available data
         return data
     else:
+        st.write(f"Error fetching data for {ticker}. Response: {data}")
         return None
 
-# Function to calculate technical indicators on intraday data (e.g., SMA, RSI)
+# Function to calculate technical indicators
 def calculate_indicators(data):
-    data["SMA_20"] = data["Close"].rolling(window=20).mean()  # 20-minute Simple Moving Average
-    data["RSI"] = 100 - (100 / (1 + data["Close"].pct_change().rolling(window=14).mean()))  # RSI calculation
+    data["SMA_20"] = data["Close"].rolling(window=20).mean()
+    data["RSI"] = 100 - (100 / (1 + data["Close"].pct_change().rolling(window=14).mean()))
     return data
 
-# Function to generate buy/sell signals based on SMA and RSI
+# Function to generate buy/sell signals
 def generate_signals(data):
     data["Buy_Signal"] = (data["Close"] > data["SMA_20"]) & (data["RSI"] < 30)
     data["Sell_Signal"] = (data["Close"] < data["SMA_20"]) & (data["RSI"] > 70)
@@ -136,53 +141,36 @@ if st.button("🔍 Analyze"):
 
         st.subheader(f"📊 Stock Data for {ticker}")
 
-        # Fetch today's intraday performance data
-        intraday_data = get_intraday_data(ticker)
-        if intraday_data is None:
-            st.write(f"⚠️ No intraday data available for {ticker}")
+        # Fetch stock data
+        data = get_intraday_data(ticker)
+        if data is None:
+            st.write(f"⚠️ No data available for {ticker}")
             continue
 
-        # Convert to DataFrame
-        df_intraday = pd.DataFrame({
-            'Timestamp': [datetime.datetime.fromtimestamp(ts) for ts in intraday_data['t']],
-            'Close': intraday_data['c'],
-            'High': intraday_data['h'],
-            'Low': intraday_data['l'],
-            'Open': intraday_data['o'],
-            'Volume': intraday_data['v'],
+        # Assuming that `data` will now be a dictionary and does not have pandas DataFrame structure.
+        # You will need to build a DataFrame manually if you want to use it for technical analysis.
+        # Here, we will use the close price from the response to generate a placeholder DataFrame.
+        df = pd.DataFrame({
+            'Date': [datetime.datetime.now()],
+            'Close': [data['c']],  # 'c' is the latest close price
         })
 
-        # Calculate technical indicators for buy/sell signals
-        df_intraday = calculate_indicators(df_intraday)
-        df_intraday = generate_signals(df_intraday)
+        df = calculate_indicators(df)
+        df = generate_signals(df)
 
-        # Generate and display buy/sell signals
-        buy_signals = df_intraday[df_intraday["Buy_Signal"]]
-        sell_signals = df_intraday[df_intraday["Sell_Signal"]]
-        
-        st.subheader(f"Buy/Sell Signals for {ticker}")
-        if not buy_signals.empty:
-            st.write(f"💡 Buy Signals at: {buy_signals['Timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S').tolist()}")
-        if not sell_signals.empty:
-            st.write(f"🚨 Sell Signals at: {sell_signals['Timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S').tolist()}")
-
-        # Plot the intraday price data and highlight buy/sell signals
+        # Plot stock price chart
         fig = go.Figure()
-
-        # Candlestick chart
-        fig.add_trace(go.Candlestick(x=df_intraday['Timestamp'],
-                                     open=df_intraday['Open'], high=df_intraday['High'],
-                                     low=df_intraday['Low'], close=df_intraday['Close'],
-                                     name="Intraday Candlestick"))
+        fig.add_trace(go.Scatter(x=df['Date'], y=df["Close"], mode="lines", name="Close Price"))
+        fig.add_trace(go.Scatter(x=df['Date'], y=df["SMA_20"], mode="lines", name="20-Day SMA"))
 
         # Highlight Buy/Sell Signals
-        fig.add_trace(go.Scatter(x=buy_signals['Timestamp'], y=buy_signals["Close"], mode="markers", 
-                                 name="Buy Signal", marker=dict(color="green", size=10)))
-        fig.add_trace(go.Scatter(x=sell_signals['Timestamp'], y=sell_signals["Close"], mode="markers", 
-                                 name="Sell Signal", marker=dict(color="red", size=10)))
+        buy_signals = df[df["Buy_Signal"]]
+        sell_signals = df[df["Sell_Signal"]]
+        fig.add_trace(go.Scatter(x=buy_signals['Date'], y=buy_signals["Close"], mode="markers", name="Buy Signal", marker=dict(color="green", size=10)))
+        fig.add_trace(go.Scatter(x=sell_signals['Date'], y=sell_signals["Close"], mode="markers", name="Sell Signal", marker=dict(color="red", size=10)))
 
         st.plotly_chart(fig)
 
-    # Auto-refresh logic (refresh every 5 minutes)
+    # Auto-refresh logic
     st.success("✅ Stock data updates every 5 minutes!")
     time.sleep(300)  # Refresh every 5 minutes
