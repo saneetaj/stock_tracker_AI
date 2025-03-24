@@ -1,30 +1,38 @@
 import streamlit as st
 import openai
-import yfinance as yf
+import finnhub
 import pandas as pd
 import datetime
 import time
 import plotly.graph_objects as go
-import requests
-from bs4 import BeautifulSoup
-import requests
-import feedparser
 import logging
-import re
-import playwright
 
 # Load OpenAI API key from Streamlit secrets
 openai_api_key = st.secrets["openai_api_key"]
+finnhub_api_key = st.secrets["finnhub_api_key"]
 
 # Initialize OpenAI client
-#openai.api_key = openai_api_key
 client = openai.OpenAI(api_key=openai_api_key)
 
-# Function to fetch stock data
+# Initialize Finnhub client
+finnhub_client = finnhub.Client(api_key=finnhub_api_key)
+
+# Function to fetch stock data from Finnhub
 def get_stock_data(ticker):
-    stock = yf.Ticker(ticker)
-    data = stock.history(period="1mo", interval="1d")  # 1 month historical data
-    return data
+    try:
+        # Fetch historical data for the past month (30 days)
+        data = finnhub_client.stock_candles(ticker, 'D', int((datetime.datetime.now() - datetime.timedelta(days=30)).timestamp()), int(datetime.datetime.now().timestamp()))
+        if data['s'] != 'ok':
+            return pd.DataFrame()  # Return empty dataframe if the request fails
+        df = pd.DataFrame(data)
+        df['t'] = pd.to_datetime(df['t'], unit='s')
+        df.set_index('t', inplace=True)
+        df = df[['c', 'h', 'l', 'o', 'v']]  # Select close, high, low, open, volume columns
+        df.columns = ['Close', 'High', 'Low', 'Open', 'Volume']
+        return df
+    except Exception as e:
+        logging.error(f"Error fetching stock data for {ticker}: {e}")
+        return pd.DataFrame()
 
 # Function to calculate technical indicators
 def calculate_indicators(data):
@@ -38,69 +46,38 @@ def generate_signals(data):
     data["Sell_Signal"] = (data["Close"] < data["SMA_20"]) & (data["RSI"] > 70)
     return data
 
-# Function to fetch stock news
-# Configure logging
-logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
-
+# Function to fetch stock news from Finnhub
 def get_stock_news(ticker):
-    url = f"https://news.google.com/search?q={ticker}&hl=en-US&gl=US&ceid=US:en"
-    headers = {"User-Agent": "Mozilla/5.0"}  # Prevent blocking
     try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
-    except requests.exceptions.RequestException as e:
-        error_message = f"⚠️ Could not fetch news for {ticker} from Google News: {e}"
-        logging.error(error_message)
-        return error_message
-    try:
-        soup = BeautifulSoup(response.text, "html.parser")
-        # Find all article containers. Google News structure can change, so this might need adjustment.
-        articles = soup.find_all("article", {"class": "MQsxUd"})  # This class name is what I found on 2024-02-08
-        articles = articles[:3]  # limit to top 3
+        news = finnhub_client.company_news(ticker, _from=datetime.datetime.now() - datetime.timedelta(days=7), to=datetime.datetime.now())
+        if not news:
+            return f"No recent news found for {ticker}."
+        news_articles = []
+        for article in news[:3]:  # Limit to top 3 articles
+            title = article['headline']
+            url = article['url']
+            news_articles.append(f"• {title}: {url}")
+        return "\n".join(news_articles)
     except Exception as e:
-        error_message = f"⚠️ Error parsing HTML from Google News for {ticker}: {e}"
-        logging.error(error_message)
-        return error_message
-
-    if not articles:
-        error_message = f"No recent news found for {ticker} on Google News."
-        logging.warning(error_message)
-        return error_message
-
-    news_articles = []
-    for article in articles:
-        try:
-            title_tag = article.find("h3")
-            link_tag = article.find("a", {"class": "DYR6b"})  # changed from 'title_tag.a'
-            if title_tag and link_tag:
-                title = title_tag.text.strip()
-                link = "https://news.google.com" + link_tag['href']
-                news_articles.append(f"• {title}: {link}")
-            else:
-                logging.warning(f"Skipping article with missing title or link: {article}")
-        except Exception as e:
-            error_message = f"⚠️ Error processing article for {ticker} from Google News: {e}"
-            logging.error(error_message)
-            return error_message
-
-    return "\n".join(news_articles)
+        logging.error(f"Error fetching news for {ticker}: {e}")
+        return f"⚠️ Could not fetch news for {ticker}."
 
 # Function to fetch market sentiment using OpenAI
 def get_market_sentiment(tickers):
     sentiments = {}
-    rate_limit_error_flag = False  # Flag to track if rate limit error has occurred
+    rate_limit_error_flag = False
 
     for ticker in tickers:
-        news_data = get_stock_news(ticker)  # Fetch news for each ticker
+        news_data = get_stock_news(ticker)
         st.sidebar.write(news_data)
         attempt = 1
 
-        while attempt <= 5:  # Retry up to 5 times
+        while attempt <= 5:
             try:
                 prompt = f"Analyze the market sentiment for {ticker} in the below news. :\n{news_data}\nProvide a brief summary (bullish, bearish, or neutral) with key reasons. Strictly limit the summary to 250 words max."
 
                 response = client.chat.completions.create(
-                    model="gpt-4-turbo",  # Ensure the correct model
+                    model="gpt-4-turbo", 
                     messages=[
                         {"role": "system", "content": "You are a financial news analyst."},
                         {"role": "user", "content": prompt}
@@ -108,22 +85,22 @@ def get_market_sentiment(tickers):
                     max_tokens=200
                 )
                 sentiments[ticker] = response.choices[0].message.content.strip()
-                break  # Exit retry loop if successful
+                break
 
-            except openai.OpenAIError as e:  # Catch OpenAI API errors
+            except openai.OpenAIError as e:
                 if not rate_limit_error_flag:
                     sentiments['error'] = "⚠️ Rate limit reached. Try again later."
-                    rate_limit_error_flag = True  # Only show the error once
+                    rate_limit_error_flag = True
                 if attempt < 5:
-                    wait_time = 2 ** attempt  # Exponential backoff
+                    wait_time = 2 ** attempt
                     time.sleep(wait_time)
                     attempt += 1
                 else:
                     sentiments[ticker] = "⚠️ Rate limit reached. Try again later."
                     break
 
-        time.sleep(2)  # Small delay between tickers
-    
+        time.sleep(2)
+
     return sentiments
 
 # Streamlit UI
@@ -150,6 +127,10 @@ if st.button("🔍 Analyze"):
 
         # Fetch stock data
         data = get_stock_data(ticker)
+        if data.empty:
+            st.write(f"⚠️ No data available for {ticker}")
+            continue
+
         data = calculate_indicators(data)
         data = generate_signals(data)
 
@@ -168,5 +149,4 @@ if st.button("🔍 Analyze"):
 
     # Auto-refresh logic
     st.success("✅ Stock data updates every 5 minutes!")
-    time.sleep(300)  # Refresh every 5 minutes 
-
+    time.sleep(300)  # Refresh every 5 minutes
