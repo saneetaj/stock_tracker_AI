@@ -77,6 +77,10 @@ tickers = [ticker.strip().upper() for ticker in tickers.split(",")]
 # "Analyze" button to trigger stock tracking
 if st.button("🔍 Analyze"):
     for ticker in tickers:
+        if ticker in sentiments:
+            st.sidebar.subheader(f"📢 Sentiment for {ticker}")
+            st.sidebar.write(sentiments[ticker])
+            
         st.subheader(f"📊 Stock Data for {ticker}")
 
         # Fetch stock data
@@ -98,8 +102,8 @@ if st.button("🔍 Analyze"):
         st.plotly_chart(fig)
 
         # Fetch market sentiment (reduces API calls)
-        sentiment = get_market_sentiment(ticker)
-        st.write(f"📢 **Market Sentiment for {ticker}:** {sentiment}")
+        #sentiment = get_market_sentiment(ticker)
+        #st.write(f"📢 **Market Sentiment for {ticker}:** {sentiment}")
 
     # Auto-refresh logic
     st.success("✅ Stock data updates every 5 minutes!")
