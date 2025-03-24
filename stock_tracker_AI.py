@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 openai_api_key = st.secrets["openai_api_key"]
 
 # Initialize OpenAI client
-openai.api_key = openai_api_key
+#openai.api_key = openai_api_key
 client = openai.OpenAI(api_key=openai_api_key)
 
 response = client.chat.completions.create(
