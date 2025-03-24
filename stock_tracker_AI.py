@@ -11,7 +11,7 @@ openai_api_key = st.secrets["openai_api_key"]
 
 # Initialize OpenAI client
 openai.api_key = openai_api_key
-st.write(f"API Key Loaded: {openai_api_key[:5]}********")
+#st.write(f"API Key Loaded: {openai_api_key[:5]}********")
 
 # Function to fetch stock data
 def get_stock_data(ticker):
