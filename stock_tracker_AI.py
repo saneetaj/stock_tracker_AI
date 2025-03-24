@@ -40,17 +40,24 @@ from yahooquery import Ticker
 
 def get_stock_news(ticker):
     stock = Ticker(ticker)
-    news = stock.news()  # Fetch news
 
-    if not news:
-        return f"No recent news found on {ticker}."
+    try:
+        news = stock.news()  # Fetch news
+        if not isinstance(news, list):  # Ensure it's a list
+            return f"No valid news found for {ticker}."
 
-    # Extract top 3 news articles
-    news_articles = [
-        f"{article['title']} - {article['link']}" for article in news[:3]
-    ]
-    
-    return "\n".join(news_articles)
+        # Extract top 3 news articles safely
+        news_articles = []
+        for article in news[:3]:  # Limit to top 3 articles
+            title = article.get("title", "No Title Available")  # Use .get() to avoid KeyError
+            link = article.get("link", "#")  # Default to "#" if missing
+            news_articles.append(f"{title} - {link}")
+
+        return "\n".join(news_articles)
+
+    except Exception as e:
+        return f"⚠️ Error fetching news for {ticker}: {str(e)}"
+
 
 # Function to fetch market sentiment using OpenAI
 def get_market_sentiment(tickers):
