@@ -84,7 +84,7 @@ def get_market_sentiment(tickers):
 
         while attempt <= 5:  # Retry up to 5 times
             try:
-                prompt = f"Analyze the market sentiment for {ticker} in the following news:\n{news_data}\nProvide a short summary (bullish, bearish, or neutral) with key reasons."
+                prompt = f"In 200-250 words analyze the market sentiment for {ticker} in the following news:\n{news_data}\nProvide a short summary (bullish, bearish, or neutral) with key reasons."
 
                 response = client.chat.completions.create(
                     model="gpt-4-turbo",  # Ensure the correct model
