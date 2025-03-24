@@ -13,6 +13,14 @@ openai_api_key = st.secrets["openai_api_key"]
 openai.api_key = openai_api_key
 client = openai.OpenAI(api_key=openai_api_key)
 
+response = client.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[{"role": "user", "content": "Hello, how's the market today?"}],
+    max_tokens=50
+)
+
+print(response.choices[0].message.content)
+
 # Function to fetch stock data
 def get_stock_data(ticker):
     stock = yf.Ticker(ticker)
