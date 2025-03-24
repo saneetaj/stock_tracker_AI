@@ -40,7 +40,7 @@ def get_market_sentiment(tickers):
         while attempt <= 5:  # Retry up to 5 times
             try:
                 prompt = f"Analyze the market sentiment for {ticker}. Provide a short summary (bullish, bearish, or neutral) with key reasons."
-                response = openai.Completion.create(
+                response = openai.ChatCompletion.create(
                     model="gpt-3.5-turbo",  # Use the correct model name
                     prompt=prompt,
                     max_tokens=20
