@@ -26,6 +26,9 @@ def get_stock_data(ticker):
 
     if response.status_code == 200 and 'c' in data:
         return data
+    elif 'error' in data:  # Handle the specific error response from Finnhub
+        st.write(f"⚠️ Error fetching data for {ticker}: {data['error']}")
+        return None
     else:
         return None
 
@@ -46,6 +49,10 @@ def get_intraday_data(ticker):
             # Fetch the latest available historical data
             return get_stock_data(ticker)  # Return the latest available data
         return data
+    elif 'error' in data:  # Handle error response
+        st.write(f"⚠️ Error fetching intraday data for {ticker}: {data['error']}")
+        # Fetch the latest available historical data if intraday data is not accessible
+        return get_stock_data(ticker)
     else:
         st.write(f"Error fetching data for {ticker}. Response: {data}")
         return None
