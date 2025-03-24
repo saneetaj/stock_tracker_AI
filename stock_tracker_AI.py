@@ -77,6 +77,7 @@ tickers = [ticker.strip().upper() for ticker in tickers.split(",")]
 # "Analyze" button to trigger stock tracking
 if st.button("🔍 Analyze"):
     for ticker in tickers:
+        sentiment = get_market_sentiment(ticker)
         if ticker in sentiments:
             st.sidebar.subheader(f"📢 Sentiment for {ticker}")
             st.sidebar.write(sentiments[ticker])
