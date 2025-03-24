@@ -13,7 +13,7 @@ openai_api_key = st.secrets["openai_api_key"]
 finnhub_api_key = st.secrets["finnhub_api_key"]
 
 # Initialize OpenAI client
-client = openai.OpenAI(api_key=openai_api_key)
+openai.api_key = openai_api_key
 
 # Initialize Finnhub client
 finnhub_client = finnhub.Client(api_key=finnhub_api_key)
@@ -71,13 +71,17 @@ def generate_signals(data):
 
 # Function to fetch stock news from Finnhub
 def get_stock_news(ticker):
-    url = f"https://finnhub.io/api/v1/company-news?symbol={ticker}&from=2025-03-01&to=2025-03-24&token={finnhub_api_key}"
+    # Get the current and previous week date range
+    from_date = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%Y-%m-%d')
+    to_date = datetime.datetime.now().strftime('%Y-%m-%d')
+
+    url = f"https://finnhub.io/api/v1/company-news?symbol={ticker}&from={from_date}&to={to_date}&token={finnhub_api_key}"
     response = requests.get(url)
     data = response.json()
 
     if response.status_code == 200 and data:
         news_articles = []
-        for article in data[:5]:  # Limit to top 3 articles
+        for article in data[:5]:  # Limit to top 5 articles
             title = article['headline']
             url = article['url']
             news_articles.append(f"• {title}: {url}")
@@ -92,14 +96,13 @@ def get_market_sentiment(tickers):
 
     for ticker in tickers:
         news_data = get_stock_news(ticker)
-        #st.sidebar.write(news_data)
         attempt = 1
 
         while attempt <= 5:
             try:
                 prompt = f"Analyze the market sentiment for {ticker} in the below news. :\n{news_data}\nProvide a brief summary (bullish, bearish, or neutral) with key reasons. Strictly limit the summary to 250 words max."
 
-                response = client.chat.completions.create(
+                response = openai.ChatCompletion.create(
                     model="gpt-3.5-turbo", 
                     messages=[
                         {"role": "system", "content": "You are a financial news analyst."},
@@ -107,7 +110,7 @@ def get_market_sentiment(tickers):
                     ],
                     max_tokens=400
                 )
-                sentiments[ticker] = response.choices[0].message.content.strip()
+                sentiments[ticker] = response.choices[0].message['content'].strip()
                 break
 
             except openai.OpenAIError as e:
@@ -154,12 +157,10 @@ if st.button("🔍 Analyze"):
             st.write(f"⚠️ No data available for {ticker}")
             continue
 
-        # Assuming that `data` will now be a dictionary and does not have pandas DataFrame structure.
-        # You will need to build a DataFrame manually if you want to use it for technical analysis.
-        # Here, we will use the close price from the response to generate a placeholder DataFrame.
+        # Create a DataFrame from the response for technical analysis
         df = pd.DataFrame({
-            'Date': [datetime.datetime.now()],
-            'Close': [data['c']],  # 'c' is the latest close price
+            'Date': [datetime.datetime.fromtimestamp(t) for t in data['t']],  # 't' is the timestamp
+            'Close': data['c'],  # 'c' is the close price
         })
 
         df = calculate_indicators(df)
