@@ -69,6 +69,7 @@ def get_market_sentiment(tickers):
     
 # Streamlit UI
 st.title("📈 AI-Powered Stock Tracker")
+st.sidebar.subheader(f"📢 Sentiment for {ticker}")
 
 # User input for multiple stock tickers
 tickers = st.text_input("Enter stock ticker symbols (comma-separated)", "AAPL,TSLA,GOOGL")
@@ -103,7 +104,6 @@ if st.button("🔍 Analyze"):
         #st.write(f"📢 **Market Sentiment for {ticker}:** {sentiment}")
         sentiments = get_market_sentiment(ticker)
         if ticker in sentiments:
-            st.sidebar.subheader(f"📢 Sentiment for {ticker}")
             st.sidebar.write(sentiments[ticker])
 
     # Auto-refresh logic
