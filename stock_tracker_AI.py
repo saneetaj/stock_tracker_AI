@@ -5,9 +5,10 @@ import pandas as pd
 import datetime
 import time
 import plotly.graph_objects as go
+import requests
 import logging
 
-# Load OpenAI API key from Streamlit secrets
+# Load OpenAI API key and Finnhub API key from Streamlit secrets
 openai_api_key = st.secrets["openai_api_key"]
 finnhub_api_key = st.secrets["finnhub_api_key"]
 
@@ -40,6 +41,7 @@ def generate_signals(data):
     data["Sell_Signal"] = (data["Close"] < data["SMA_20"]) & (data["RSI"] > 70)
     return data
 
+# Function to fetch stock news from Finnhub
 def get_stock_news(ticker):
     url = f"https://finnhub.io/api/v1/company-news?symbol={ticker}&from=2025-03-01&to=2025-03-24&token={finnhub_api_key}"
     response = requests.get(url)
@@ -120,23 +122,31 @@ if st.button("🔍 Analyze"):
 
         # Fetch stock data
         data = get_stock_data(ticker)
-        if data.empty:
+        if data is None:
             st.write(f"⚠️ No data available for {ticker}")
             continue
 
-        data = calculate_indicators(data)
-        data = generate_signals(data)
+        # Assuming that `data` will now be a dictionary and does not have pandas DataFrame structure.
+        # You will need to build a DataFrame manually if you want to use it for technical analysis.
+        # Here, we will use the close price from the response to generate a placeholder DataFrame.
+        df = pd.DataFrame({
+            'Date': [datetime.datetime.now()],
+            'Close': [data['c']],  # 'c' is the latest close price
+        })
+
+        df = calculate_indicators(df)
+        df = generate_signals(df)
 
         # Plot stock price chart
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=data.index, y=data["Close"], mode="lines", name="Close Price"))
-        fig.add_trace(go.Scatter(x=data.index, y=data["SMA_20"], mode="lines", name="20-Day SMA"))
+        fig.add_trace(go.Scatter(x=df['Date'], y=df["Close"], mode="lines", name="Close Price"))
+        fig.add_trace(go.Scatter(x=df['Date'], y=df["SMA_20"], mode="lines", name="20-Day SMA"))
 
         # Highlight Buy/Sell Signals
-        buy_signals = data[data["Buy_Signal"]]
-        sell_signals = data[data["Sell_Signal"]]
-        fig.add_trace(go.Scatter(x=buy_signals.index, y=buy_signals["Close"], mode="markers", name="Buy Signal", marker=dict(color="green", size=10)))
-        fig.add_trace(go.Scatter(x=sell_signals.index, y=sell_signals["Close"], mode="markers", name="Sell Signal", marker=dict(color="red", size=10)))
+        buy_signals = df[df["Buy_Signal"]]
+        sell_signals = df[df["Sell_Signal"]]
+        fig.add_trace(go.Scatter(x=buy_signals['Date'], y=buy_signals["Close"], mode="markers", name="Buy Signal", marker=dict(color="green", size=10)))
+        fig.add_trace(go.Scatter(x=sell_signals['Date'], y=sell_signals["Close"], mode="markers", name="Sell Signal", marker=dict(color="red", size=10)))
 
         st.plotly_chart(fig)
 
