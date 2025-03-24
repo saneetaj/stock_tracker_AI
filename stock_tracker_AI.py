@@ -41,6 +41,7 @@ def generate_signals(data):
 # Configure logging
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
+
 def get_stock_news(ticker):
     """
     Fetches the top 3 news articles for a given stock ticker from Google News.
@@ -49,7 +50,7 @@ def get_stock_news(ticker):
         ticker (str): The stock ticker symbol (e.g., "AAPL").
 
     Returns:
-        str: A string containing the formatted news articles, or an error message.
+        str: A string containing the formatted news articles, or an error message to be displayed by streamlit.
     """
     url = f"https://news.google.com/search?q={ticker}&hl=en-US&gl=US&ceid=US:en"
     headers = {"User-Agent": "Mozilla/5.0"}  # Prevent blocking
@@ -59,30 +60,33 @@ def get_stock_news(ticker):
     except requests.exceptions.RequestException as e:
         error_message = f"⚠️ Could not fetch news for {ticker} from Google News: {e}"
         logging.error(error_message)
-        return error_message
+        st.error(error_message)  # Use st.error to display in Streamlit
+        return ""  # Return empty string to prevent further errors
 
     try:
         soup = BeautifulSoup(response.text, "html.parser")
         # 1. Attempt to find articles using a more general selector.
         articles = soup.find_all("article")
         if not articles:
-            # 2. If the general selector doesn't work, use a more specific one (the one from the previous version).
-            articles = soup.find_all("article", {"class": "MQsxUd"})  # This class name was found on 2024-02-08
+            # 2. If the general selector doesn't work, use a more specific one.
+            articles = soup.find_all("article", {"class": "MQsxUd"})  # This class was found on 2024-02-08
             if not articles:
-                error_message = f"⚠️ No articles found using primary or secondary selectors for {ticker} on Google News."
+                error_message = f"⚠️ No articles found for {ticker} on Google News."
                 logging.error(error_message)
-                return error_message
-
+                st.error(error_message)
+                return ""  # Return empty string
         articles = articles[:3]  # limit to top 3
     except Exception as e:
         error_message = f"⚠️ Error parsing HTML from Google News for {ticker}: {e}"
         logging.error(error_message)
-        return error_message
+        st.error(error_message)
+        return ""  # Return empty string
 
     if not articles:
         error_message = f"No recent news found for {ticker} on Google News."
         logging.warning(error_message)
-        return error_message
+        st.warning(error_message)  # Use st.warning for non-critical issues
+        return ""  # Return empty string
 
     news_articles = []
     for article in articles:
@@ -101,7 +105,8 @@ def get_stock_news(ticker):
         except Exception as e:
             error_message = f"⚠️ Error processing article for {ticker} from Google News: {e}"
             logging.error(error_message)
-            return error_message
+            st.error(error_message)
+            return ""  # Return empty string
 
     return "\n".join(news_articles)
 
