@@ -57,102 +57,18 @@ def get_intraday_data(ticker):
         st.write(f"Error fetching data for {ticker}. Response: {data}")
         return None
 
-# Function to calculate basic technical indicators
+# Function to calculate technical indicators
 def calculate_indicators(data):
-    # Simple Moving Average (SMA)
-    # A Buy signal is generated when the price is above the SMA (suggesting an uptrend)
-    # A Sell signal is generated when the price is below the SMA (suggesting a downtrend)
     data["SMA_20"] = data["Close"].rolling(window=20).mean()
-
-    # Relative Strength Index (RSI)
-    # RSI below 30 typically indicates an oversold condition (potential Buy signal)
-    # RSI above 70 typically indicates an overbought condition (potential Sell signal)
     data["RSI"] = 100 - (100 / (1 + data["Close"].pct_change().rolling(window=14).mean()))
-    
     return data
 
-# Function to calculate additional technical indicators
-def calculate_additional_indicators(data):
-    # Exponential Moving Average (EMA)
-    # Shorter period EMA crossing above longer period EMA can be a Buy signal (bullish trend)
-    # EMA crossing below can be a Sell signal (bearish trend)
-    data["EMA_9"] = data["Close"].ewm(span=9, adjust=False).mean()
-    data["EMA_50"] = data["Close"].ewm(span=50, adjust=False).mean()
-
-    # MACD (12-26-9)
-    # MACD crossing above the signal line can be a Buy signal (bullish crossover)
-    # MACD crossing below the signal line can be a Sell signal (bearish crossover)
-    data["MACD"] = data["EMA_9"] - data["EMA_50"]
-    data["MACD_Signal"] = data["MACD"].ewm(span=9, adjust=False).mean()
-
-    # Bollinger Bands (20-period)
-    # Price touching or going below the lower Bollinger Band suggests an oversold condition (Buy signal)
-    # Price touching or going above the upper Bollinger Band suggests an overbought condition (Sell signal)
-    data["Bollinger_Middle"] = data["Close"].rolling(window=20).mean()
-    data["Bollinger_Upper"] = data["Bollinger_Middle"] + 2 * data["Close"].rolling(window=20).std()
-    data["Bollinger_Lower"] = data["Bollinger_Middle"] - 2 * data["Close"].rolling(window=20).std()
-
-    # Stochastic Oscillator
-    # Stochastic K value below 20 suggests oversold (potential Buy signal)
-    # Stochastic K value above 80 suggests overbought (potential Sell signal)
-    high_14 = data["High"].rolling(window=14).max()
-    low_14 = data["Low"].rolling(window=14).min()
-    data["Stochastic_K"] = (data["Close"] - low_14) / (high_14 - low_14) * 100
-    data["Stochastic_D"] = data["Stochastic_K"].rolling(window=3).mean()
-
-    # ATR (Average True Range)
-    # ATR measures market volatility, but is not directly used in buy/sell signals in this case
-    # It's often used to adjust stop-loss levels based on the volatility of the stock
-    data["High-Low"] = data["High"] - data["Low"]
-    data["High-Prev Close"] = abs(data["High"] - data["Close"].shift(1))
-    data["Low-Prev Close"] = abs(data["Low"] - data["Close"].shift(1))
-    data["TR"] = data[["High-Low", "High-Prev Close", "Low-Prev Close"]].max(axis=1)
-    data["ATR"] = data["TR"].rolling(window=14).mean()
-
-    return data
-
-# Function to generate buy/sell signals based on indicators
+# Function to generate buy/sell signals
 def generate_signals(data):
-    # Basic Buy/Sell Signals based on SMA and RSI
-    data["Buy_Signal"] = (data["Close"] > data["SMA_20"]) & (data["RSI"] < 30)  # Buy if price above SMA and RSI is oversold
-    data["Sell_Signal"] = (data["Close"] < data["SMA_20"]) & (data["RSI"] > 70)  # Sell if price below SMA and RSI is overbought
-
-    # Additional signals based on EMA, MACD, Bollinger Bands, and Stochastic Oscillator
-    data["Buy_Signal_EMA"] = data["EMA_9"] > data["EMA_50"]  # Buy if short-term EMA is above long-term EMA
-    data["Sell_Signal_EMA"] = data["EMA_9"] < data["EMA_50"]  # Sell if short-term EMA is below long-term EMA
-
-    data["Buy_Signal_MACD"] = data["MACD"] > data["MACD_Signal"]  # Buy if MACD is above the signal line
-    data["Sell_Signal_MACD"] = data["MACD"] < data["MACD_Signal"]  # Sell if MACD is below the signal line
-
-    data["Buy_Signal_BB"] = data["Close"] < data["Bollinger_Lower"]  # Buy if price is below the lower Bollinger Band
-    data["Sell_Signal_BB"] = data["Close"] > data["Bollinger_Upper"]  # Sell if price is above the upper Bollinger Band
-
-    data["Buy_Signal_Stochastic"] = (data["Stochastic_K"] < 20) & (data["Stochastic_K"] > data["Stochastic_D"])  # Buy if Stochastic K is below 20 and above D
-    data["Sell_Signal_Stochastic"] = (data["Stochastic_K"] > 80) & (data["Stochastic_K"] < data["Stochastic_D"])  # Sell if Stochastic K is above 80 and below D
-
+    data["Buy_Signal"] = (data["Close"] > data["SMA_20"]) & (data["RSI"] < 30)
+    data["Sell_Signal"] = (data["Close"] < data["SMA_20"]) & (data["RSI"] > 70)
     return data
 
-# Function to combine all buy/sell signals
-def combine_signals(data):
-    # Combining all the buy signals into one: All conditions must be true for a Buy
-    data["Buy_Signal_Combined"] = (
-        data["Buy_Signal"] &
-        data["Buy_Signal_EMA"] &
-        data["Buy_Signal_MACD"] &
-        data["Buy_Signal_BB"] &
-        data["Buy_Signal_Stochastic"]
-    )
-
-    # Combining all the sell signals into one: Any of the conditions being true will trigger a Sell
-    data["Sell_Signal_Combined"] = (
-        data["Sell_Signal"] |
-        data["Sell_Signal_EMA"] |
-        data["Sell_Signal_MACD"] |
-        data["Sell_Signal_BB"] |
-        data["Sell_Signal_Stochastic"]
-    )
-
-    return data
 # Function to fetch stock news from Finnhub
 def get_stock_news(ticker):
     url = f"https://finnhub.io/api/v1/company-news?symbol={ticker}&from=2025-03-01&to=2025-03-24&token={finnhub_api_key}"
@@ -184,7 +100,7 @@ def get_market_sentiment(tickers):
                 prompt = f"Analyze the market sentiment for {ticker} in the below news. :\n{news_data}\nProvide a brief summary (bullish, bearish, or neutral) with key reasons. Strictly limit the summary to 250 words max."
 
                 response = client.chat.completions.create(
-                    model="gpt-3.5-turbo", 
+                    model="gpt-4", 
                     messages=[
                         {"role": "system", "content": "You are a financial news analyst."},
                         {"role": "user", "content": prompt}
@@ -210,7 +126,6 @@ def get_market_sentiment(tickers):
 
     return sentiments
 
-    
 # Streamlit UI
 st.title("📈 AI-Powered Stock Tracker")
 
@@ -220,6 +135,9 @@ tickers = [ticker.strip().upper() for ticker in tickers.split(",")]
 
 # "Analyze" button to trigger stock tracking
 if st.button("🔍 Analyze"):
+    sentiments = get_market_sentiment(tickers)
+    
+    # Display sentiment info in the sidebar only if it exists
     for ticker in tickers:
         if ticker in sentiments and sentiments[ticker] != "⚠️ Rate limit reached. Try again later.":
             st.sidebar.subheader(f"📢 Sentiment for {ticker}")
@@ -227,7 +145,7 @@ if st.button("🔍 Analyze"):
         elif ticker in sentiments:
             st.sidebar.subheader(f"📢 Sentiment for {ticker}")
             st.sidebar.write(sentiments[ticker])
-            
+
         st.subheader(f"📊 Stock Data for {ticker}")
 
         # Fetch stock data
@@ -236,27 +154,25 @@ if st.button("🔍 Analyze"):
             st.write(f"⚠️ No data available for {ticker}")
             continue
 
-        # Create DataFrame and calculate indicators
+        # Assuming that `data` will now be a dictionary and does not have pandas DataFrame structure.
+        # You will need to build a DataFrame manually if you want to use it for technical analysis.
+        # Here, we will use the close price from the response to generate a placeholder DataFrame.
         df = pd.DataFrame({
             'Date': [datetime.datetime.now()],
-            'Close': [data['c']],  # Latest close price
-            'High': [data['h']],  # Highest price
-            'Low': [data['l']],   # Lowest price
+            'Close': [data['c']],  # 'c' is the latest close price
         })
 
         df = calculate_indicators(df)
-        df = calculate_additional_indicators(df)  # Add additional indicators
-        df = generate_signals(df)  # Generate buy/sell signals
-        df = combine_signals(df)  # Combine all signals
+        df = generate_signals(df)
 
         # Plot stock price chart
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=df['Date'], y=df["Close"], mode="lines", name="Close Price"))
         fig.add_trace(go.Scatter(x=df['Date'], y=df["SMA_20"], mode="lines", name="20-Day SMA"))
 
-        # Highlight Combined Buy/Sell Signals
-        buy_signals = df[df["Buy_Signal_Combined"]]
-        sell_signals = df[df["Sell_Signal_Combined"]]
+        # Highlight Buy/Sell Signals
+        buy_signals = df[df["Buy_Signal"]]
+        sell_signals = df[df["Sell_Signal"]]
         fig.add_trace(go.Scatter(x=buy_signals['Date'], y=buy_signals["Close"], mode="markers", name="Buy Signal", marker=dict(color="green", size=10)))
         fig.add_trace(go.Scatter(x=sell_signals['Date'], y=sell_signals["Close"], mode="markers", name="Sell Signal", marker=dict(color="red", size=10)))
 
