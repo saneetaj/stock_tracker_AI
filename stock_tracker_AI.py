@@ -70,7 +70,7 @@ def get_market_sentiment(tickers):
 st.title("📈 AI-Powered Stock Tracker")
 
 # User input for multiple stock tickers
-tickers = st.text_input("Enter stock ticker symbols (comma-separated)", "AAPL,TSLA,GOOGL")
+tickers = st.text_input("Enter stock ticker symbol", "AAPL")
 tickers = [ticker.strip().upper() for ticker in tickers.split(",")]
 
 # "Analyze" button to trigger stock tracking
