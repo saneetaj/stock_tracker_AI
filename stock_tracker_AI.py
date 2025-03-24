@@ -38,12 +38,20 @@ import feedparser
 # Function to fetch stock news from Yahoo Finance RSS
 from yahooquery import Ticker
 
+from yahooquery import Ticker
+
 def get_stock_news(ticker):
     stock = Ticker(ticker)
 
     try:
         news = stock.news()  # Fetch news
-        if not isinstance(news, list):  # Ensure it's a list
+        print(f"News data for {ticker}: {news}")  # Debugging line to inspect the structure of news
+
+        # Check if news is a valid list
+        if isinstance(news, str):  # If news is a string (error or invalid data)
+            return f"⚠️ Error fetching news for {ticker}: {news}"
+
+        if not isinstance(news, list):  # If it's not a list, handle it
             return f"No valid news found for {ticker}."
 
         # Extract top 3 news articles safely
@@ -57,6 +65,9 @@ def get_stock_news(ticker):
 
     except Exception as e:
         return f"⚠️ Error fetching news for {ticker}: {str(e)}"
+
+# Example usage:
+print(get_stock_news("AAPL"))
 
 
 # Function to fetch market sentiment using OpenAI
