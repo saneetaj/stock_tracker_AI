@@ -10,4 +10,5 @@ requests
 feedparser
 yahooquery
 logging
-
+selenium
+webdriver_manager.chrome
