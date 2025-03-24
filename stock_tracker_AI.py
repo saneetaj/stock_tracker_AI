@@ -130,7 +130,7 @@ if st.button("🔍 Analyze"):
 
 
 
-"""
+'''
 import streamlit as st
 import openai
 import yfinance as yf
@@ -239,5 +239,5 @@ if st.button("🔍 Analyze"):
     # Auto-refresh logic
     st.success("✅ Stock data updates every 5 minutes!")
     time.sleep(300)  # Refresh every 5 minutes 
-    """
+    '''
 
