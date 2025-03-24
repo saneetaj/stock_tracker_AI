@@ -9,6 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 import requests
 import feedparser
+import logging
 
 # Load OpenAI API key from Streamlit secrets
 openai_api_key = st.secrets["openai_api_key"]
@@ -36,8 +37,8 @@ def generate_signals(data):
     return data
 
 # Function to fetch stock news from Yahoo
-import requests
-from bs4 import BeautifulSoup
+# Configure logging
+logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def get_stock_news(ticker):
     """
@@ -55,16 +56,22 @@ def get_stock_news(ticker):
         response = requests.get(url, headers=headers)
         response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
     except requests.exceptions.RequestException as e:
-        return f"⚠️ Could not fetch news for {ticker}: {e}"
+        error_message = f"⚠️ Could not fetch news for {ticker}: {e}"
+        logging.error(error_message)  # Log the error
+        return error_message
 
     try:
         soup = BeautifulSoup(response.text, "html.parser")
         articles = soup.find_all("li", class_="js-stream-content", limit=3)  # Get top 3 articles
     except Exception as e:
-        return f"⚠️ Error parsing HTML for {ticker}: {e}"
+        error_message = f"⚠️ Error parsing HTML for {ticker}: {e}"
+        logging.error(error_message)  # Log the error
+        return error_message
 
     if not articles:
-        return f"No recent news found for {ticker}."
+        error_message = f"No recent news found for {ticker}."
+        logging.warning(error_message)
+        return error_message
 
     news_articles = []
     for article in articles:
@@ -74,10 +81,15 @@ def get_stock_news(ticker):
                 title = title_tag.text.strip()
                 link = f"https://finance.yahoo.com{title_tag.a['href']}"
                 news_articles.append(f"• {title}: {link}")  # Improved formatting
+            else:
+                logging.warning(f"Skipping article with missing title or link: {article}")
         except Exception as e:
-            return f"⚠️ Error processing article for {ticker}: {e}" # error for individual articles
+            error_message = f"⚠️ Error processing article for {ticker}: {e}"
+            logging.error(error_message)  # Log the error
+            return error_message
 
     return "\n".join(news_articles)
+
 
 
 # Function to fetch market sentiment using OpenAI
