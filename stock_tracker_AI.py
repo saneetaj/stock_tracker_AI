@@ -77,7 +77,7 @@ def get_stock_news(ticker):
 
     if response.status_code == 200 and data:
         news_articles = []
-        for article in data[:5]:  # Limit to top 5 articles
+        for article in data[:3]:  # Limit to top 3 articles
             title = article['headline']
             url = article['url']
             news_articles.append(f"• {title}: {url}")
@@ -100,7 +100,7 @@ def get_market_sentiment(tickers):
                 prompt = f"Analyze the market sentiment for {ticker} in the below news. :\n{news_data}\nProvide a brief summary (bullish, bearish, or neutral) with key reasons. Strictly limit the summary to 250 words max."
 
                 response = client.chat.completions.create(
-                    model="gpt-4", 
+                    model="gpt-3.5-turbo", 
                     messages=[
                         {"role": "system", "content": "You are a financial news analyst."},
                         {"role": "user", "content": prompt}
