@@ -12,3 +12,4 @@ yahooquery
 logging
 selenium
 webdriver_manager
+playwright
