@@ -38,6 +38,10 @@ import requests
 import feedparser
 
 # Function to fetch stock news from Yahoo
+import requests
+from bs4 import BeautifulSoup
+
+# Function to fetch stock news from Yahoo
 def get_stock_news(ticker):
     url = f"https://finance.yahoo.com/quote/{ticker}/news"
     headers = {"User-Agent": "Mozilla/5.0"}  # Prevent blocking
@@ -47,7 +51,12 @@ def get_stock_news(ticker):
         return f"⚠️ Could not fetch news for {ticker}."
 
     soup = BeautifulSoup(response.text, "html.parser")
-    articles = soup.find_all("li", class_="js-stream-content", limit=3)  # Get top 3 articles
+
+    # Debugging: Print the first 500 characters of the HTML to check structure
+    print(soup.prettify()[:500])
+
+    # Attempt to find articles with the proper class
+    articles = soup.find_all("li", class_="js-stream-content", limit=3)
 
     if not articles:
         return f"No recent news found for {ticker}."
