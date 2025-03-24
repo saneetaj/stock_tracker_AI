@@ -43,7 +43,7 @@ def get_market_sentiment(tickers):
                 response = openai.Completion.create(
                     model="gpt-3.5-turbo",  # Use the correct model name
                     prompt=prompt,
-                    max_tokens=100
+                    max_tokens=20
                 )
                 sentiments[ticker] = response['choices'][0]['text'].strip()  # Fetch the text from the response
                 break  # Exit retry loop if successful
