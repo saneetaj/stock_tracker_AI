@@ -5,6 +5,8 @@ import pandas as pd
 import datetime
 import time
 import plotly.graph_objects as go
+import requests
+from bs4 import BeautifulSoup
 
 # Load OpenAI API key from Streamlit secrets
 openai_api_key = st.secrets["openai_api_key"]
@@ -35,39 +37,30 @@ def generate_signals(data):
 import requests
 import feedparser
 
-# Function to fetch stock news from Yahoo Finance RSS
-from yahooquery import Ticker
-
-from yahooquery import Ticker
-
+# Function to fetch stock news from Yahoo
 def get_stock_news(ticker):
-    stock = Ticker(ticker)
+    url = f"https://finance.yahoo.com/quote/{ticker}/news"
+    headers = {"User-Agent": "Mozilla/5.0"}  # Prevent blocking
+    response = requests.get(url, headers=headers)
 
-    try:
-        news = stock.news()  # Fetch news
-        print(f"News data for {ticker}: {news}")  # Debugging line to inspect the structure of news
+    if response.status_code != 200:
+        return f"⚠️ Could not fetch news for {ticker}."
 
-        # Check if news is a valid list
-        if isinstance(news, str):  # If news is a string (error or invalid data)
-            return f"⚠️ Error fetching news for {ticker}: {news}"
+    soup = BeautifulSoup(response.text, "html.parser")
+    articles = soup.find_all("li", class_="js-stream-content", limit=3)  # Get top 3 articles
 
-        if not isinstance(news, list):  # If it's not a list, handle it
-            return f"No valid news found for {ticker}."
+    if not articles:
+        return f"No recent news found for {ticker}."
 
-        # Extract top 3 news articles safely
-        news_articles = []
-        for article in news[:3]:  # Limit to top 3 articles
-            title = article.get("title", "No Title Available")  # Use .get() to avoid KeyError
-            link = article.get("link", "#")  # Default to "#" if missing
+    news_articles = []
+    for article in articles:
+        title_tag = article.find("h3")
+        if title_tag and title_tag.a:
+            title = title_tag.text.strip()
+            link = f"https://finance.yahoo.com{title_tag.a['href']}"
             news_articles.append(f"{title} - {link}")
 
-        return "\n".join(news_articles)
-
-    except Exception as e:
-        return f"⚠️ Error fetching news for {ticker}: {str(e)}"
-
-# Example usage:
-print(get_stock_news("AAPL"))
+    return "\n".join(news_articles)
 
 
 # Function to fetch market sentiment using OpenAI
