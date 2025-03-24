@@ -2,11 +2,11 @@ import streamlit as st
 import openai
 import yfinance as yf
 import pandas as pd
-import time
 import datetime
+import time
 import plotly.graph_objects as go
 
-# Load API key securely from Streamlit secrets
+# Load OpenAI API key from Streamlit secrets
 openai_api_key = st.secrets["openai_api_key"]
 
 # Initialize OpenAI client
@@ -30,14 +30,17 @@ def generate_signals(data):
     data["Sell_Signal"] = (data["Close"] < data["SMA_20"]) & (data["RSI"] > 70)
     return data
 
-# Function to fetch market sentiment using OpenAI
+# Function to fetch market sentiment using OpenAI (optimized for rate limits)
 def get_market_sentiment(ticker):
-    prompt = f"Analyze the market sentiment for {ticker}. Provide a short summary (bullish, bearish, or neutral) with key reasons."
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response.choices[0].message.content
+    try:
+        prompt = f"Analyze the market sentiment for {ticker}. Provide a short summary (bullish, bearish, or neutral) with key reasons."
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.choices[0].message.content
+    except openai.RateLimitError:
+        return "⚠️ OpenAI Rate Limit Reached. Try again later."
 
 # Streamlit UI
 st.title("📈 AI-Powered Stock Tracker")
@@ -46,36 +49,33 @@ st.title("📈 AI-Powered Stock Tracker")
 tickers = st.text_input("Enter stock ticker symbols (comma-separated)", "AAPL,TSLA,GOOGL")
 tickers = [ticker.strip().upper() for ticker in tickers.split(",")]
 
-# Refresh interval (5 minutes)
-refresh_time = 300
+# "Analyze" button to trigger stock tracking
+if st.button("🔍 Analyze"):
+    for ticker in tickers:
+        st.subheader(f"📊 Stock Data for {ticker}")
 
-# Live stock tracking
-for ticker in tickers:
-    st.subheader(f"📊 Stock Data for {ticker}")
-    
-    # Fetch stock data
-    data = get_stock_data(ticker)
-    data = calculate_indicators(data)
-    data = generate_signals(data)
-    
-    # Plot stock price chart
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=data.index, y=data["Close"], mode="lines", name="Close Price"))
-    fig.add_trace(go.Scatter(x=data.index, y=data["SMA_20"], mode="lines", name="20-Day SMA"))
-    
-    # Highlight Buy/Sell Signals
-    buy_signals = data[data["Buy_Signal"]]
-    sell_signals = data[data["Sell_Signal"]]
-    fig.add_trace(go.Scatter(x=buy_signals.index, y=buy_signals["Close"], mode="markers", name="Buy Signal", marker=dict(color="green", size=10)))
-    fig.add_trace(go.Scatter(x=sell_signals.index, y=sell_signals["Close"], mode="markers", name="Sell Signal", marker=dict(color="red", size=10)))
+        # Fetch stock data
+        data = get_stock_data(ticker)
+        data = calculate_indicators(data)
+        data = generate_signals(data)
 
-    st.plotly_chart(fig)
-    
-    # Market sentiment
-    sentiment = get_market_sentiment(ticker)
-    st.write(f"📢 **Market Sentiment for {ticker}:** {sentiment}")
+        # Plot stock price chart
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=data.index, y=data["Close"], mode="lines", name="Close Price"))
+        fig.add_trace(go.Scatter(x=data.index, y=data["SMA_20"], mode="lines", name="20-Day SMA"))
 
-    # Auto-refresh
-    time.sleep(refresh_time)
+        # Highlight Buy/Sell Signals
+        buy_signals = data[data["Buy_Signal"]]
+        sell_signals = data[data["Sell_Signal"]]
+        fig.add_trace(go.Scatter(x=buy_signals.index, y=buy_signals["Close"], mode="markers", name="Buy Signal", marker=dict(color="green", size=10)))
+        fig.add_trace(go.Scatter(x=sell_signals.index, y=sell_signals["Close"], mode="markers", name="Sell Signal", marker=dict(color="red", size=10)))
 
-st.success("✅ Stock data updates every 5 minutes!")
+        st.plotly_chart(fig)
+
+        # Fetch market sentiment (reduces API calls)
+        sentiment = get_market_sentiment(ticker)
+        st.write(f"📢 **Market Sentiment for {ticker}:** {sentiment}")
+
+    # Auto-refresh logic
+    st.success("✅ Stock data updates every 5 minutes!")
+    time.sleep(300)  # Refresh every 5 minutes
