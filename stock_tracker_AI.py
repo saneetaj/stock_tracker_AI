@@ -36,12 +36,7 @@ def generate_signals(data):
     data["Sell_Signal"] = (data["Close"] < data["SMA_20"]) & (data["RSI"] > 70)
     return data
 
-# Function to fetch stock news from Yahoo
-# Configure logging
-import requests
-from bs4 import BeautifulSoup
-import logging
-
+# Function to fetch stock news
 # Configure logging
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -111,7 +106,7 @@ def get_market_sentiment(tickers):
 
         while attempt <= 5:  # Retry up to 5 times
             try:
-                prompt = f"In 200-250 words analyze the market sentiment for {ticker} in the following news:\n{news_data}\nProvide a short summary (bullish, bearish, or neutral) with key reasons."
+                prompt = f"Analyze the market sentiment to give a BUY, SELL OR NEUTRAL rating for {ticker} in the below news. :\n{news_data}\nProvide a 200-250 words summary (bullish, bearish, or neutral) with key reasons."
 
                 response = client.chat.completions.create(
                     model="gpt-4-turbo",  # Ensure the correct model
