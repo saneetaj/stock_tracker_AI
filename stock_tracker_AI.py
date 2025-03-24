@@ -31,20 +31,32 @@ def generate_signals(data):
     return data
 
 # Function to fetch market sentiment using OpenAI (optimized for rate limits)
+import time
+import openai
+
 def get_market_sentiment(tickers):
     sentiments = {}
     for ticker in tickers:
-        try:
-            prompt = f"Analyze the market sentiment for {ticker}. Provide a short summary (bullish, bearish, or neutral) with key reasons."
-            response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "user", "content": prompt}]
-            )
-            sentiments[ticker] = response.choices[0].message.content
-        except openai.RateLimitError:
-            sentiments[ticker] = "⚠️ Rate limit reached. Try again later."
+        attempt = 1
+        while attempt <= 5:  # Retry up to 5 times
+            try:
+                prompt = f"Analyze the market sentiment for {ticker}. Provide a short summary (bullish, bearish, or neutral) with key reasons."
+                response = client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                sentiments[ticker] = response.choices[0].message.content
+                break  # Exit retry loop if successful
+            except openai.RateLimitError:
+                if attempt < 5:
+                    wait_time = 2 ** attempt  # Exponential backoff
+                    time.sleep(wait_time)
+                    attempt += 1
+                else:
+                    sentiments[ticker] = "⚠️ Rate limit reached. Try again later."
+                    break
         
-        time.sleep(5)  # Add a small delay between requests
+        time.sleep(2)  # Small delay between tickers
     
     return sentiments
     
