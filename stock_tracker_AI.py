@@ -32,20 +32,26 @@ def generate_signals(data):
     return data
 
 # Function to fetch stock news from Yahoo Finance
-# Function to fetch stock news from Yahoo Finance
-def get_stock_news(ticker):
-    stock = yf.Ticker(ticker)
-    news = getattr(stock, "news", [])  # Avoids AttributeError if `news` is missing
+import requests
+import feedparser
 
-    if not news:
+# Function to fetch stock news from Yahoo Finance RSS
+def get_stock_news(ticker):
+    url = f"https://finance.yahoo.com/rss/headline?s={ticker}"  # Yahoo Finance RSS feed
+    response = requests.get(url)
+    
+    if response.status_code != 200:
+        return "⚠️ Could not fetch news. Please try again later."
+    
+    feed = feedparser.parse(response.text)  # Parse RSS feed
+    if not feed.entries:
         return "No recent news found."
 
-    news_articles = []
-    for article in news[:3]:  # Limit to top 3 articles
-        title = article.get("title", "No Title Available")
-        link = article.get("link", "#")  # Default to "#" if no link
-        news_articles.append(f"{title} - {link}")
-
+    # Extract top 3 news articles
+    news_articles = [
+        f"{entry.title} - {entry.link}" for entry in feed.entries[:3]
+    ]
+    
     return "\n".join(news_articles)
 
 # Function to fetch market sentiment using OpenAI
