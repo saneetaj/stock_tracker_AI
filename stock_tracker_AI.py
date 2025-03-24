@@ -101,7 +101,7 @@ if st.button("🔍 Analyze"):
         # Fetch market sentiment (reduces API calls)
         #sentiment = get_market_sentiment(ticker)
         #st.write(f"📢 **Market Sentiment for {ticker}:** {sentiment}")
-        sentiment = get_market_sentiment(ticker)
+        sentiments = get_market_sentiment(ticker)
         if ticker in sentiments:
             st.sidebar.subheader(f"📢 Sentiment for {ticker}")
             st.sidebar.write(sentiments[ticker])
