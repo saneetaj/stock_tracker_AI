@@ -19,7 +19,7 @@ response = client.chat.completions.create(
     max_tokens=50
 )
 
-print(response.choices[0].message.content)
+st.sidebar.write(response.choices[0].message.content)
 
 # Function to fetch stock data
 def get_stock_data(ticker):
