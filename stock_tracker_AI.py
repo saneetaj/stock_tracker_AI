@@ -100,7 +100,7 @@ def get_market_sentiment(tickers):
                 prompt = f"Analyze the market sentiment for {ticker} in the below news. :\n{news_data}\nProvide a brief summary (bullish, bearish, or neutral) with key reasons. Strictly limit the summary to 250 words max."
 
                 response = client.chat.completions.create(
-                    model="gpt-4", 
+                    model="gpt-3.5-turbo", 
                     messages=[
                         {"role": "system", "content": "You are a financial news analyst."},
                         {"role": "user", "content": prompt}
