@@ -10,3 +10,4 @@ requests
 feedparser
 yahooquery
 logging
+re
