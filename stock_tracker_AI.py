@@ -77,7 +77,7 @@ def get_stock_news(ticker):
 
     if response.status_code == 200 and data:
         news_articles = []
-        for article in data[:3]:  # Limit to top 3 articles
+        for article in data[:5]:  # Limit to top 5 articles
             title = article['headline']
             url = article['url']
             news_articles.append(f"• {title}: {url}")
@@ -92,7 +92,7 @@ def get_market_sentiment(tickers):
 
     for ticker in tickers:
         news_data = get_stock_news(ticker)
-        st.sidebar.write(news_data)
+        #st.sidebar.write(news_data)
         attempt = 1
 
         while attempt <= 5:
