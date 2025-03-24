@@ -77,7 +77,7 @@ def get_stock_news(ticker):
 
     if response.status_code == 200 and data:
         news_articles = []
-        for article in data[:3]:  # Limit to top 3 articles
+        for article in data[:5]:  # Limit to top 3 articles
             title = article['headline']
             url = article['url']
             news_articles.append(f"• {title}: {url}")
