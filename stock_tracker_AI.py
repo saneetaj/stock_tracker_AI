@@ -44,7 +44,7 @@ def get_market_sentiment(tickers):
         except openai.RateLimitError:
             sentiments[ticker] = "⚠️ Rate limit reached. Try again later."
         
-        time.sleep(2)  # Add a small delay between requests
+        time.sleep(5)  # Add a small delay between requests
     
     return sentiments
     
