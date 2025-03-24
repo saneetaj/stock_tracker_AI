@@ -119,7 +119,7 @@ def get_market_sentiment(tickers):
                         {"role": "system", "content": "You are a financial news analyst."},
                         {"role": "user", "content": prompt}
                     ],
-                    max_tokens=100
+                    max_tokens=200
                 )
                 sentiments[ticker] = response.choices[0].message.content.strip()
                 break  # Exit retry loop if successful
