@@ -53,6 +53,22 @@ def generate_signals(df):
     df["Sell_Signal_Combined"] = df["Sell_Signal"] | df["Sell_Signal_EMA"] | df["Sell_Signal_MACD"]
     return df
 
+# Function to fetch stock news from Finnhub
+def get_stock_news(ticker):
+    url = f"https://finnhub.io/api/v1/company-news?symbol={ticker}&from=2025-03-01&to=2025-03-24&token={finnhub_api_key}"
+    response = requests.get(url)
+    data = response.json()
+
+    if response.status_code == 200 and data:
+        news_articles = []
+        for article in data[:3]:  # Limit to top 3 articles
+            title = article['headline']
+            url = article['url']
+            news_articles.append(f"• {title}: {url}")
+        return "\n".join(news_articles)
+    else:
+        return f"⚠️ No news available for {ticker}."
+        
 # Function to fetch market sentiment using OpenAI
 def get_market_sentiment(tickers):
     sentiments = {}
