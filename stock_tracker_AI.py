@@ -25,13 +25,19 @@ def get_stock_data(ticker):
     data = response.json()
 
     if response.status_code == 200 and 'c' in data:
-        return data
-    elif 'error' in data:  # Handle the specific error response from Finnhub
+        # Create DataFrame from latest data
+        df = pd.DataFrame({
+            'Date': [datetime.datetime.now()],
+            'Close': [data['c']],
+            'High': [data['h']],
+            'Low': [data['l']],
+        })
+        return df
+    elif 'error' in data:
         st.write(f"⚠️ Error fetching data for {ticker}: {data['error']}")
         return None
     else:
         return None
-#st.write(get_stock_data("AAPL"))
 
 # Function to get intraday stock data (last available data when markets are closed)
 def get_intraday_data(ticker):
