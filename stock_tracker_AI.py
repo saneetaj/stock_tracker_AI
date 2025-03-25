@@ -235,7 +235,6 @@ if st.button("🔍 Analyze"):
         })
 
         df = calculate_indicators(df)
-        df = calculate_additional_indicators(df)  # Add additional indicators
         df = generate_signals(df)  # Generate buy/sell signals
         df = combine_signals(df)  # Combine all signals
 
