@@ -31,7 +31,7 @@ def get_stock_data(ticker):
         return None
     else:
         return None
-    st.sidebar.write(get_stock_data("AAPL"))
+    st.write(get_stock_data(ticker))
     
 # Function to get intraday stock data (last available data when markets are closed)
 def get_intraday_data(ticker):
