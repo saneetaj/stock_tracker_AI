@@ -92,7 +92,6 @@ def get_market_sentiment(tickers):
 
     for ticker in tickers:
         news_data = get_stock_news(ticker)
-        st.sidebar.write(news_data)
         attempt = 1
 
         while attempt <= 5:
