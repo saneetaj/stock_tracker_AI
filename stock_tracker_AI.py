@@ -18,25 +18,26 @@ client = openai.OpenAI(api_key=openai_api_key)
 # Initialize Finnhub client
 finnhub_client = finnhub.Client(api_key=finnhub_api_key)
 
-# Function to fetch stock data from Finnhub (latest available data)
-def get_stock_data(ticker):
-    url = f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={finnhub_api_key}"
+# Function to fetch historical stock data from Finnhub
+def get_historical_stock_data(ticker, days=50):
+    now = datetime.datetime.now()
+    end_time = int(now.timestamp())
+    start_time = int((now - datetime.timedelta(days=days)).timestamp())
+
+    url = f"https://finnhub.io/api/v1/stock/candle?symbol={ticker}&resolution=D&from={start_time}&to={end_time}&token={finnhub_api_key}"
     response = requests.get(url)
     data = response.json()
 
     if response.status_code == 200 and 'c' in data:
-        # Create DataFrame from latest data
         df = pd.DataFrame({
-            'Date': [datetime.datetime.now()],
-            'Close': [data['c']],
-            'High': [data['h']],
-            'Low': [data['l']],
+            'Date': [datetime.datetime.fromtimestamp(t) for t in data['t']],
+            'Close': data['c'],
+            'High': data['h'],
+            'Low': data['l'],
         })
         return df
-    elif 'error' in data:
-        st.write(f"⚠️ Error fetching data for {ticker}: {data['error']}")
-        return None
     else:
+        st.write(f"⚠️ Error fetching historical data for {ticker}")
         return None
 
 # Function to get intraday stock data (last available data when markets are closed)
@@ -51,10 +52,9 @@ def get_intraday_data(ticker):
 
     if response.status_code == 200 and 'c' in data:
         if not data['c']:
-            st.write(f"No intraday data available for {ticker}. Market might be closed.")
-            return get_stock_data(ticker)
+            st.write(f"No intraday data available for {ticker}. Market might be closed. Using historical data.")
+            return get_historical_stock_data(ticker) #get historical data
         else:
-            # Create DataFrame from intraday data
             df = pd.DataFrame({
                 'Date': [datetime.datetime.fromtimestamp(t) for t in data['t']],
                 'Close': data['c'],
@@ -63,8 +63,8 @@ def get_intraday_data(ticker):
             })
             return df
     elif 'error' in data:
-        st.write(f"⚠️ Error fetching intraday data for {ticker}: {data['error']}\nMarkets might be closed and/or paid version of Finnhub required.")
-        return get_stock_data(ticker)
+        st.write(f"⚠️ Error fetching intraday data for {ticker}: {data['error']}\nMarkets might be closed and/or paid version of Finnhub required. Using historical data.")
+        return get_historical_stock_data(ticker) #get historical data
     else:
         st.write(f"Error fetching data for {ticker}. Response: {data}")
         return None
