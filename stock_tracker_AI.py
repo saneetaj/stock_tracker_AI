@@ -31,28 +31,6 @@ def get_intraday_data(ticker):
     data = response.json()
     return data if response.status_code == 200 and 'c' in data else get_stock_data(ticker)
 
-# Function to fetch and summarize stock news
-def get_stock_news_summary(ticker):
-    url = f"https://finnhub.io/api/v1/company-news?symbol={ticker}&from=2025-03-01&to=2025-03-24&token={finnhub_api_key}"
-    response = requests.get(url)
-    if response.status_code == 200 and response.json():
-        articles = response.json()[:3]
-        news_text = "\n".join([f"{article['headline']}: {article['url']}" for article in articles])
-        prompt = f"Summarize the sentiment (bullish, bearish, or neutral) from the following news articles:\n{news_text}"
-        try:
-            response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are a financial analyst."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=400
-            )
-            return response.choices[0].message.content.strip()
-        except openai.OpenAIError:
-            return "⚠️ Could not fetch sentiment analysis."
-    return "⚠️ No news available."
-
 # Function to calculate technical indicators
 def calculate_indicators(df):
     df["SMA_20"] = df["Close"].rolling(window=20).mean()
@@ -75,12 +53,53 @@ def generate_signals(df):
     df["Sell_Signal_Combined"] = df["Sell_Signal"] | df["Sell_Signal_EMA"] | df["Sell_Signal_MACD"]
     return df
 
+# Function to fetch market sentiment using OpenAI
+def get_market_sentiment(tickers):
+    sentiments = {}
+    rate_limit_error_flag = False
+
+    for ticker in tickers:
+        news_data = get_stock_news(ticker)
+        st.sidebar.write(news_data)
+        attempt = 1
+
+        while attempt <= 5:
+            try:
+                prompt = f"Analyze the market sentiment for {ticker} in the below news. :\n{news_data}\nProvide a brief summary (bullish, bearish, or neutral) with key reasons. Strictly limit the summary to 250 words max."
+
+                response = client.chat.completions.create(
+                    model="gpt-3.5-turbo", 
+                    messages=[
+                        {"role": "system", "content": "You are a financial news analyst."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=400
+                )
+                sentiments[ticker] = response.choices[0].message.content.strip()
+                break
+
+            except openai.OpenAIError as e:
+                if not rate_limit_error_flag:
+                    sentiments['error'] = "⚠️ Rate limit reached. Try again later."
+                    rate_limit_error_flag = True
+                if attempt < 5:
+                    wait_time = 2 ** attempt
+                    time.sleep(wait_time)
+                    attempt += 1
+                else:
+                    sentiments[ticker] = "⚠️ Rate limit reached. Try again later."
+                    break
+
+        time.sleep(2)
+
+    return sentiments
+
 # Streamlit UI
 st.title("📈 AI-Powered Stock Tracker")
 tickers = st.text_input("Enter stock ticker symbol", "AAPL").strip().upper()
 
 if st.button("🔍 Analyze"):
-    sentiment = get_stock_news_summary(tickers)
+    sentiment = get_market_sentiment(tickers)
     st.sidebar.subheader(f"📢 Sentiment for {tickers}")
     st.sidebar.write(sentiment)
     
