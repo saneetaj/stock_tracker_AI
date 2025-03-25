@@ -31,28 +31,33 @@ def get_stock_data(ticker):
         return None
     else:
         return None
-st.write(get_stock_data("AAPL"))
+#st.write(get_stock_data("AAPL"))
 
 # Function to get intraday stock data (last available data when markets are closed)
 def get_intraday_data(ticker):
     now = datetime.datetime.now()
-    start_time = int((now - datetime.timedelta(days=1)).timestamp())  # Yesterday's timestamp
-    end_time = int(now.timestamp())  # Current timestamp
+    start_time = int((now - datetime.timedelta(days=1)).timestamp())
+    end_time = int(now.timestamp())
 
-    # Fetch 1-minute candlestick data
     url = f"https://finnhub.io/api/v1/stock/candle?symbol={ticker}&resolution=1&from={start_time}&to={end_time}&token={finnhub_api_key}"
     response = requests.get(url)
     data = response.json()
 
     if response.status_code == 200 and 'c' in data:
-        if not data['c']:  # Check if the 'close' prices are empty
+        if not data['c']:
             st.write(f"No intraday data available for {ticker}. Market might be closed.")
-            # Fetch the latest available historical data
-            return get_stock_data(ticker)  # Return the latest available data
-        return data
-    elif 'error' in data:  # Handle error response
+            return get_stock_data(ticker)
+        else:
+            # Create DataFrame from intraday data
+            df = pd.DataFrame({
+                'Date': [datetime.datetime.fromtimestamp(t) for t in data['t']],
+                'Close': data['c'],
+                'High': data['h'],
+                'Low': data['l'],
+            })
+            return df
+    elif 'error' in data:
         st.write(f"⚠️ Error fetching intraday data for {ticker}: {data['error']}\nMarkets might be closed and/or paid version of Finnhub required.")
-        # Fetch the latest available historical data if intraday data is not accessible
         return get_stock_data(ticker)
     else:
         st.write(f"Error fetching data for {ticker}. Response: {data}")
@@ -227,15 +232,7 @@ if st.button("🔍 Analyze"):
             st.write(f"⚠️ No data available for {ticker}")
             continue
 
-        # Create DataFrame and calculate indicators
-        df = pd.DataFrame({
-            'Date': [datetime.datetime.now()],
-            'Close': [data['c']],  # Latest close price
-            'High': [data['h']],  # Highest price
-            'Low': [data['l']],   # Lowest price
-        })
-
-        df = calculate_indicators(df)
+        df = calculate_indicators(data) # use the dataframe returned from get_intraday_data
         df = generate_signals(df)  # Generate buy/sell signals
         df = combine_signals(df)  # Combine all signals
 
