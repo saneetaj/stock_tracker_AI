@@ -37,7 +37,7 @@ def get_historical_stock_data(ticker, days=50):
         })
         return df
     else:
-        st.write(f"⚠️ Error fetching historical data for {ticker}. Status code: {response.status_code}. Response: {data}")")
+        st.write(f"⚠️ Error fetching historical data for {ticker}. Status code: {response.status_code}. Response: {data}")
         return None
 
 # Function to get intraday stock data (last available data when markets are closed)
@@ -211,7 +211,7 @@ def get_market_sentiment(tickers):
     return sentiments
 
 # Streamlit UI
-st.title("📈 AI-Powered Stock Tracker")
+st.title("📈 Ticker AI")
 
 # User input for multiple stock tickers
 tickers = st.text_input("Enter stock ticker symbol", "AAPL")
