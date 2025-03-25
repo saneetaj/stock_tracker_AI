@@ -239,6 +239,9 @@ if st.button("🔍 Analyze"):
             continue
 
         df = calculate_indicators(data) # use the dataframe returned from get_intraday_data
+        if len(df) < 20: #check dataframe length.
+            st.write(f"⚠️ Not enough data points to calculate indicators for {ticker}")
+            continue
         df = generate_signals(df)  # Generate buy/sell signals
         df = combine_signals(df)  # Combine all signals
 
