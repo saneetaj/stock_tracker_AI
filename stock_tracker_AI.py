@@ -6,52 +6,68 @@ import datetime
 import time
 import plotly.graph_objects as go
 import requests
+import logging
 
-# Load API keys from Streamlit secrets
+# Load OpenAI API key and Finnhub API key from Streamlit secrets
 openai_api_key = st.secrets["openai_api_key"]
 finnhub_api_key = st.secrets["finnhub_api_key"]
 
-# Initialize OpenAI and Finnhub clients
+# Initialize OpenAI client
 client = openai.OpenAI(api_key=openai_api_key)
+
+# Initialize Finnhub client
 finnhub_client = finnhub.Client(api_key=finnhub_api_key)
 
-# Function to fetch latest stock data
+# Function to fetch stock data from Finnhub (latest available data)
 def get_stock_data(ticker):
     url = f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={finnhub_api_key}"
     response = requests.get(url)
-    return response.json() if response.status_code == 200 else None
+    data = response.json()
 
-# Function to fetch intraday stock data
+    if response.status_code == 200 and 'c' in data:
+        return data
+    elif 'error' in data:  # Handle the specific error response from Finnhub
+        st.write(f"⚠️ Error fetching data for {ticker}: {data['error']}")
+        return None
+    else:
+        return None
+
+# Function to get intraday stock data (last available data when markets are closed)
 def get_intraday_data(ticker):
     now = datetime.datetime.now()
-    start_time = int((now - datetime.timedelta(days=1)).timestamp())
-    end_time = int(now.timestamp())
+    start_time = int((now - datetime.timedelta(days=1)).timestamp())  # Yesterday's timestamp
+    end_time = int(now.timestamp())  # Current timestamp
+
+    # Fetch 1-minute candlestick data
     url = f"https://finnhub.io/api/v1/stock/candle?symbol={ticker}&resolution=1&from={start_time}&to={end_time}&token={finnhub_api_key}"
     response = requests.get(url)
     data = response.json()
-    return data if response.status_code == 200 and 'c' in data else get_stock_data(ticker)
+
+    if response.status_code == 200 and 'c' in data:
+        if not data['c']:  # Check if the 'close' prices are empty
+            st.write(f"No intraday data available for {ticker}. Market might be closed.")
+            # Fetch the latest available historical data
+            return get_stock_data(ticker)  # Return the latest available data
+        return data
+    elif 'error' in data:  # Handle error response
+        st.write(f"⚠️ Error fetching intraday data for {ticker}: {data['error']}\nMarkets might be closed and/or paid version of Finnhub required.")
+        # Fetch the latest available historical data if intraday data is not accessible
+        return get_stock_data(ticker)
+    else:
+        st.write(f"Error fetching data for {ticker}. Response: {data}")
+        return None
 
 # Function to calculate technical indicators
-def calculate_indicators(df):
-    df["SMA_20"] = df["Close"].rolling(window=20).mean()
-    df["RSI"] = 100 - (100 / (1 + df["Close"].pct_change().rolling(window=14).mean()))
-    df["EMA_9"] = df["Close"].ewm(span=9, adjust=False).mean()
-    df["EMA_50"] = df["Close"].ewm(span=50, adjust=False).mean()
-    df["MACD"] = df["EMA_9"] - df["EMA_50"]
-    df["MACD_Signal"] = df["MACD"].ewm(span=9, adjust=False).mean()
-    return df
+def calculate_indicators(data):
+    data["SMA_20"] = data["Close"].rolling(window=20).mean()
+    data["RSI"] = 100 - (100 / (1 + data["Close"].pct_change().rolling(window=14).mean()))
+    return data
 
 # Function to generate buy/sell signals
-def generate_signals(df):
-    df["Buy_Signal"] = (df["Close"] > df["SMA_20"]) & (df["RSI"] < 30)
-    df["Sell_Signal"] = (df["Close"] < df["SMA_20"]) & (df["RSI"] > 70)
-    df["Buy_Signal_EMA"] = df["EMA_9"] > df["EMA_50"]
-    df["Sell_Signal_EMA"] = df["EMA_9"] < df["EMA_50"]
-    df["Buy_Signal_MACD"] = df["MACD"] > df["MACD_Signal"]
-    df["Sell_Signal_MACD"] = df["MACD"] < df["MACD_Signal"]
-    df["Buy_Signal_Combined"] = df["Buy_Signal"] & df["Buy_Signal_EMA"] & df["Buy_Signal_MACD"]
-    df["Sell_Signal_Combined"] = df["Sell_Signal"] | df["Sell_Signal_EMA"] | df["Sell_Signal_MACD"]
-    return df
+def generate_signals(data):
+    data["Buy_Signal"] = (data["Close"] > data["SMA_20"]) & (data["RSI"] < 30)
+    data["Sell_Signal"] = (data["Close"] < data["SMA_20"]) & (data["RSI"] > 70)
+    return data
 
 # Function to fetch stock news from Finnhub
 def get_stock_news(ticker):
@@ -68,7 +84,7 @@ def get_stock_news(ticker):
         return "\n".join(news_articles)
     else:
         return f"⚠️ No news available for {ticker}."
-        
+
 # Function to fetch market sentiment using OpenAI
 def get_market_sentiment(tickers):
     sentiments = {}
@@ -84,7 +100,7 @@ def get_market_sentiment(tickers):
                 prompt = f"Analyze the market sentiment for {ticker} in the below news. :\n{news_data}\nProvide a brief summary (bullish, bearish, or neutral) with key reasons. Strictly limit the summary to 250 words max."
 
                 response = client.chat.completions.create(
-                    model="gpt-3.5-turbo", 
+                    model="gpt-4", 
                     messages=[
                         {"role": "system", "content": "You are a financial news analyst."},
                         {"role": "user", "content": prompt}
@@ -112,36 +128,56 @@ def get_market_sentiment(tickers):
 
 # Streamlit UI
 st.title("📈 AI-Powered Stock Tracker")
-tickers = st.text_input("Enter stock ticker symbol", "AAPL").strip().upper()
 
+# User input for multiple stock tickers
+tickers = st.text_input("Enter stock ticker symbol", "AAPL")
+tickers = [ticker.strip().upper() for ticker in tickers.split(",")]
+
+# "Analyze" button to trigger stock tracking
 if st.button("🔍 Analyze"):
-    sentiment = get_market_sentiment(tickers)
-    st.sidebar.subheader(f"📢 Sentiment for {tickers}")
-    st.sidebar.write(sentiment)
+    sentiments = get_market_sentiment(tickers)
     
-    st.subheader(f"📊 Stock Data for {tickers}")
-    data = get_intraday_data(tickers)
-    if data:
+    # Display sentiment info in the sidebar only if it exists
+    for ticker in tickers:
+        if ticker in sentiments and sentiments[ticker] != "⚠️ Rate limit reached. Try again later.":
+            st.sidebar.subheader(f"📢 Sentiment for {ticker}")
+            st.sidebar.write(sentiments[ticker])
+        elif ticker in sentiments:
+            st.sidebar.subheader(f"📢 Sentiment for {ticker}")
+            st.sidebar.write(sentiments[ticker])
+
+        st.subheader(f"📊 Stock Data for {ticker}")
+
+        # Fetch stock data
+        data = get_intraday_data(ticker)
+        if data is None:
+            st.write(f"⚠️ No data available for {ticker}")
+            continue
+
+        # Assuming that `data` will now be a dictionary and does not have pandas DataFrame structure.
+        # You will need to build a DataFrame manually if you want to use it for technical analysis.
+        # Here, we will use the close price from the response to generate a placeholder DataFrame.
         df = pd.DataFrame({
             'Date': [datetime.datetime.now()],
-            'Close': [data['c']],
-            'High': [data['h']],
-            'Low': [data['l']],
+            'Close': [data['c']],  # 'c' is the latest close price
         })
+
         df = calculate_indicators(df)
         df = generate_signals(df)
-        
+
+        # Plot stock price chart
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=df['Date'], y=df["Close"], mode="lines", name="Close Price"))
         fig.add_trace(go.Scatter(x=df['Date'], y=df["SMA_20"], mode="lines", name="20-Day SMA"))
-        buy_signals = df[df["Buy_Signal_Combined"]]
-        sell_signals = df[df["Sell_Signal_Combined"]]
+
+        # Highlight Buy/Sell Signals
+        buy_signals = df[df["Buy_Signal"]]
+        sell_signals = df[df["Sell_Signal"]]
         fig.add_trace(go.Scatter(x=buy_signals['Date'], y=buy_signals["Close"], mode="markers", name="Buy Signal", marker=dict(color="green", size=10)))
         fig.add_trace(go.Scatter(x=sell_signals['Date'], y=sell_signals["Close"], mode="markers", name="Sell Signal", marker=dict(color="red", size=10)))
+
         st.plotly_chart(fig)
-    else:
-        st.write(f"⚠️ No data available for {tickers}")
-    
-   # Auto-refresh logic
+
+    # Auto-refresh logic
     st.success("✅ Stock data updates every 5 minutes!")
     time.sleep(300)  # Refresh every 5 minutes
