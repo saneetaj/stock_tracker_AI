@@ -138,6 +138,7 @@ async def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
             return df
         else:
             st.error(f"⚠️ No intraday data found for {ticker}")
+            logging.error(f"No intraday data found for {ticker}")
             return None
     except Exception as e:
         st.error(f"⚠️ Error fetching intraday data for {ticker}: {e}")
