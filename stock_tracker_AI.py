@@ -74,159 +74,131 @@ except Exception as e:
 # Indicator Calculation Functions
 
 def compute_rsi(series: pd.Series, period: int = 14) -> pd.Series:
-    """
-    Compute the Relative Strength Index (RSI) using average gain and loss.
-    """
     delta = series.diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
     avg_gain = gain.rolling(window=period, min_periods=period).mean()
     avg_loss = loss.rolling(window=period, min_periods=period).mean()
     rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
+    return 100 - (100 / (1 + rs))
 
 def compute_adx(data: pd.DataFrame, period: int = 14) -> pd.Series:
-    """
-    Computes the Average Directional Index (ADX) to gauge trend strength.
-    """
     high_low = data["High"] - data["Low"]
     high_prev_close = (data["High"] - data["Close"].shift()).abs()
     low_prev_close = (data["Low"] - data["Close"].shift()).abs()
     tr = high_low.combine(high_prev_close, max).combine(low_prev_close, max)
-    
     up_move = data["High"] - data["High"].shift()
     down_move = data["Low"].shift() - data["Low"]
     plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
     minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
-    
     tr_smooth = tr.rolling(window=period, min_periods=period).sum()
     plus_dm_smooth = plus_dm.rolling(window=period, min_periods=period).sum()
     minus_dm_smooth = minus_dm.rolling(window=period, min_periods=period).sum()
-    
     plus_di = 100 * (plus_dm_smooth / tr_smooth)
     minus_di = 100 * (minus_dm_smooth / tr_smooth)
-    
     dx = (abs(plus_di - minus_di) / (plus_di + minus_di)) * 100
-    adx = dx.rolling(window=period, min_periods=period).mean()
-    return adx
+    return dx.rolling(window=period, min_periods=period).mean()
 
 def compute_cci(data: pd.DataFrame, period: int = 20) -> pd.Series:
-    """
-    Computes the Commodity Channel Index (CCI) using a custom mean absolute deviation.
-    """
     tp = (data["High"] + data["Low"] + data["Close"]) / 3.0
     sma_tp = tp.rolling(window=period, min_periods=period).mean()
-    
-    # Custom mean absolute deviation function
     def mad_func(x):
         return np.mean(np.abs(x - np.mean(x)))
-    
     mad = tp.rolling(window=period, min_periods=period).apply(mad_func, raw=True)
-    cci = (tp - sma_tp) / (0.015 * mad)
-    return cci
+    return (tp - sma_tp) / (0.015 * mad)
 
 def calculate_indicators(data: pd.DataFrame) -> pd.DataFrame:
-    """
-    Calculates various technical indicators:
-      - 50-day and 200-day SMAs
-      - RSI (14)
-      - MACD (12,26) and its signal line (9)
-      - Bollinger Bands (20-day)
-      - Stochastic Oscillator (14,3)
-      - ADX (14)
-      - CCI (20)
-    """
-    try:
-        # Ensure the data has a Date column
-        if "Date" not in data.columns:
-            st.error("Data is missing the 'Date' column.")
-            return pd.DataFrame()
-        data["Date"] = pd.to_datetime(data["Date"])
-        data.sort_values("Date", inplace=True)
-        # SMAs
-        data["SMA_50"] = data["Close"].rolling(window=50).mean()
-        data["SMA_200"] = data["Close"].rolling(window=200).mean()
-        # RSI
-        data["RSI"] = compute_rsi(data["Close"], period=14)
-        # MACD
-        data["EMA_12"] = data["Close"].ewm(span=12, adjust=False).mean()
-        data["EMA_26"] = data["Close"].ewm(span=26, adjust=False).mean()
-        data["MACD"] = data["EMA_12"] - data["EMA_26"]
-        data["MACD_Signal"] = data["MACD"].ewm(span=9, adjust=False).mean()
-        # Bollinger Bands
-        data["BB_Middle"] = data["Close"].rolling(window=20).mean()
-        data["BB_Std"] = data["Close"].rolling(window=20).std()
-        data["BB_Upper"] = data["BB_Middle"] + 2 * data["BB_Std"]
-        data["BB_Lower"] = data["BB_Middle"] - 2 * data["BB_Std"]
-        # Stochastic Oscillator
-        data["Stoch_High"] = data["High"].rolling(window=14).max()
-        data["Stoch_Low"] = data["Low"].rolling(window=14).min()
-        data["Stochastic_K"] = 100 * ((data["Close"] - data["Stoch_Low"]) / (data["Stoch_High"] - data["Stoch_Low"]))
-        data["Stochastic_D"] = data["Stochastic_K"].rolling(window=3).mean()
-        # ADX
-        data["ADX"] = compute_adx(data, period=14)
-        # CCI
-        data["CCI"] = compute_cci(data, period=20)
-        return data
-    except Exception as e:
-        st.error(f"Error in calculate_indicators: {e}")
-        logging.error(f"Error in calculate_indicators: {e}")
+    if "Date" not in data.columns:
+        st.error("Data is missing the 'Date' column.")
         return pd.DataFrame()
+    data["Date"] = pd.to_datetime(data["Date"])
+    data.sort_values("Date", inplace=True)
+    data["SMA_50"] = data["Close"].rolling(window=50).mean()
+    data["SMA_200"] = data["Close"].rolling(window=200).mean()
+    data["RSI"] = compute_rsi(data["Close"], period=14)
+    data["EMA_12"] = data["Close"].ewm(span=12, adjust=False).mean()
+    data["EMA_26"] = data["Close"].ewm(span=26, adjust=False).mean()
+    data["MACD"] = data["EMA_12"] - data["EMA_26"]
+    data["MACD_Signal"] = data["MACD"].ewm(span=9, adjust=False).mean()
+    data["BB_Middle"] = data["Close"].rolling(window=20).mean()
+    data["BB_Std"] = data["Close"].rolling(window=20).std()
+    data["BB_Upper"] = data["BB_Middle"] + 2 * data["BB_Std"]
+    data["BB_Lower"] = data["BB_Middle"] - 2 * data["BB_Std"]
+    data["Stoch_High"] = data["High"].rolling(window=14).max()
+    data["Stoch_Low"] = data["Low"].rolling(window=14).min()
+    data["Stochastic_K"] = 100 * ((data["Close"] - data["Stoch_Low"]) / (data["Stoch_High"] - data["Stoch_Low"]))
+    data["Stochastic_D"] = data["Stochastic_K"].rolling(window=3).mean()
+    data["ADX"] = compute_adx(data, period=14)
+    data["CCI"] = compute_cci(data, period=20)
+    return data
 
 # -------------------------
-# Signal Generation and Backtesting
+# Buy Low, Sell High Signal Generation and Backtesting
 
-def generate_combined_signals(data: pd.DataFrame) -> pd.DataFrame:
+def generate_buy_low_sell_high_signals(data: pd.DataFrame) -> pd.DataFrame:
     """
-    Adjusted combined signals using additional indicators.
+    Generates buy and sell signals using a multi-indicator "buy low, sell high" approach.
     
-    BUY conditions (in a bullish trend):
-      - Trend: SMA_50 > SMA_200 and ADX > 25
-      - Price pullback: Close is at least 2% below SMA_50 (Close < 0.98 * SMA_50)
-      - RSI: Below 50
-      - MACD: MACD > MACD_Signal
-      - CCI: Below -100
+    Oversold (Buy) conditions:
+      - RSI < 30
+      - Close < Bollinger Lower Band
+      - MACD < MACD_Signal
+      - CCI < -100
+      - ADX < 20  (non-trending market)
       
-    SELL conditions:
-      - Either trend reversal: SMA_50 < SMA_200 or ADX < 25
-      - Or, in a bullish trend, when price rallies above SMA_50 by at least 2% and RSI > 50.
+    Overbought (Sell) conditions:
+      - RSI > 70
+      - Close > Bollinger Upper Band
+      - MACD > MACD_Signal
+      - CCI > 100
+      - ADX < 20
+      
+    If at least 2 oversold conditions are met, a Buy signal is generated.
+    If at least 2 overbought conditions are met, a Sell signal is generated.
     """
     data = data.copy()
-    required_cols = ["SMA_50", "SMA_200", "ADX", "RSI", "MACD", "MACD_Signal", "CCI"]
+    required_cols = ["RSI", "BB_Lower", "BB_Upper", "MACD", "MACD_Signal", "CCI", "ADX", "Close"]
     missing_cols = [col for col in required_cols if col not in data.columns]
     if missing_cols:
-        st.error(f"Missing indicator columns: {missing_cols}. Recalculating indicators.")
-        data = calculate_indicators(data)
-        missing_cols = [col for col in required_cols if col not in data.columns]
-        if missing_cols:
-            st.error(f"After recalculation, still missing: {missing_cols}. Data columns: {data.columns.tolist()}")
+        st.error(f"Missing columns {missing_cols}. Please recalculate indicators first.")
+        return data
+
+    data["cond_RSI_buy"] = data["RSI"] < 30
+    data["cond_BB_buy"]  = data["Close"] < data["BB_Lower"]
+    data["cond_MACD_buy"] = data["MACD"] < data["MACD_Signal"]
+    data["cond_CCI_buy"] = data["CCI"] < -100
+    data["cond_ADX_buy"] = data["ADX"] < 20
+
+    data["cond_RSI_sell"] = data["RSI"] > 70
+    data["cond_BB_sell"]  = data["Close"] > data["BB_Upper"]
+    data["cond_MACD_sell"] = data["MACD"] > data["MACD_Signal"]
+    data["cond_CCI_sell"] = data["CCI"] > 100
+    data["cond_ADX_sell"] = data["ADX"] < 20
+
+    data["buy_score"] = (data["cond_RSI_buy"].astype(int) +
+                         data["cond_BB_buy"].astype(int) +
+                         data["cond_MACD_buy"].astype(int) +
+                         data["cond_CCI_buy"].astype(int) +
+                         data["cond_ADX_buy"].astype(int))
     
-    data["Buy_Signal_Combined"] = False
-    data["Sell_Signal_Combined"] = False
+    data["sell_score"] = (data["cond_RSI_sell"].astype(int) +
+                          data["cond_BB_sell"].astype(int) +
+                          data["cond_MACD_sell"].astype(int) +
+                          data["cond_CCI_sell"].astype(int) +
+                          data["cond_ADX_sell"].astype(int))
     
-    bullish_trend = (data["SMA_50"] > data["SMA_200"]) & (data["ADX"] > 25)
-    buy_condition = bullish_trend & \
-                    (data["Close"] < 0.98 * data["SMA_50"]) & \
-                    (data["RSI"] < 50) & \
-                    (data["MACD"] > data["MACD_Signal"]) & \
-                    (data["CCI"] < -100)
-    
-    trend_reversal = (data["SMA_50"] < data["SMA_200"]) | (data["ADX"] < 25)
-    rally_condition = bullish_trend & (data["Close"] > 1.02 * data["SMA_50"]) & (data["RSI"] > 50)
-    sell_condition = trend_reversal | rally_condition
-    
-    data.loc[buy_condition, "Buy_Signal_Combined"] = True
-    data.loc[sell_condition, "Sell_Signal_Combined"] = True
+    data["Buy_Signal"] = data["buy_score"] >= 2
+    data["Sell_Signal"] = data["sell_score"] >= 2
     
     return data
 
-def backtest_combined_strategy(data: pd.DataFrame) -> pd.DataFrame:
+def backtest_buy_low_sell_high(data: pd.DataFrame) -> pd.DataFrame:
     """
-    Backtests the adjusted strategy:
-      - Positions are taken on the next day's open (via shifting the signal).
-      - When a buy signal is triggered, the position is entered and held until a sell signal.
-      - Cumulative returns for the strategy and a buy & hold benchmark are calculated.
+    Backtests the buy-low, sell-high strategy.
+    Positions are simulated as follows:
+      - When a Buy signal is generated, go long on the next day.
+      - Remain in position until a Sell signal.
+    Cumulative returns are calculated for the strategy and compared to a buy-and-hold benchmark.
     """
     df = data.copy()
     if "Date" not in df.columns:
@@ -236,12 +208,12 @@ def backtest_combined_strategy(data: pd.DataFrame) -> pd.DataFrame:
     df = calculate_indicators(df)
     df.sort_values("Date", inplace=True)
     df = df.reset_index(drop=True)
-    df = generate_combined_signals(df)
+    df = generate_buy_low_sell_high_signals(df)
     
     df.set_index("Date", inplace=True)
     df["Signal"] = 0
-    df.loc[df["Buy_Signal_Combined"], "Signal"] = 1
-    df.loc[df["Sell_Signal_Combined"], "Signal"] = 0
+    df.loc[df["Buy_Signal"], "Signal"] = 1
+    df.loc[df["Sell_Signal"], "Signal"] = 0
     df["Position"] = df["Signal"].replace(to_replace=0, method='ffill').shift(1).fillna(0)
     
     df["Market_Return"] = df["Close"].pct_change()
@@ -398,7 +370,7 @@ async def main():
                 st.sidebar.subheader(f"📢 Sentiment for {ticker}")
                 st.sidebar.write(sentiments[ticker])
             st.subheader(f"📊 Stock Data for {ticker}")
-            # Prefer intraday data if available
+            # Prefer intraday data if available; otherwise, use historical
             intraday_data = await get_intraday_data(ticker)
             historical_data = get_historical_stock_data(ticker)
             data_to_use = intraday_data if intraday_data is not None else historical_data
@@ -406,39 +378,54 @@ async def main():
                 st.write(f"⚠️ No data available for {ticker}")
                 continue
             
-            # Calculate indicators and generate combined signals for charting
+            # Calculate indicators and generate buy low, sell high signals for charting
             processed_data = calculate_indicators(data_to_use)
-            processed_data = generate_combined_signals(processed_data)
+            processed_data = generate_buy_low_sell_high_signals(processed_data)
             
-            # Plot the stock chart with combined signals
+            # Plot the stock chart with buy/sell signals
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=processed_data['Date'], y=processed_data['Close'],
-                                     mode='lines', name='Close Price', showlegend=True))
-            buy_signals = processed_data[processed_data["Buy_Signal_Combined"] == True]
-            sell_signals = processed_data[processed_data["Sell_Signal_Combined"] == True]
-            fig.add_trace(go.Scatter(x=buy_signals['Date'], y=buy_signals['Close'],
-                                     mode='markers', marker=dict(color='green', symbol='triangle-up', size=12),
-                                     name='Buy Signal', showlegend=True))
-            fig.add_trace(go.Scatter(x=sell_signals['Date'], y=sell_signals['Close'],
-                                     mode='markers', marker=dict(color='red', symbol='triangle-down', size=12),
-                                     name='Sell Signal', showlegend=True))
-            fig.update_layout(title=f"{ticker} Stock Chart with Combined Signals",
-                              xaxis_title="Date",
-                              yaxis_title="Price",
-                              legend_title="Signals")
+            fig.add_trace(go.Scatter(
+                x=processed_data['Date'],
+                y=processed_data['Close'],
+                mode='lines',
+                name='Close Price',
+                showlegend=True
+            ))
+            buy_signals = processed_data[processed_data["Buy_Signal"] == True]
+            sell_signals = processed_data[processed_data["Sell_Signal"] == True]
+            fig.add_trace(go.Scatter(
+                x=buy_signals['Date'],
+                y=buy_signals['Close'],
+                mode='markers',
+                marker=dict(color='green', symbol='triangle-up', size=12),
+                name='Buy Signal',
+                showlegend=True
+            ))
+            fig.add_trace(go.Scatter(
+                x=sell_signals['Date'],
+                y=sell_signals['Close'],
+                mode='markers',
+                marker=dict(color='red', symbol='triangle-down', size=12),
+                name='Sell Signal',
+                showlegend=True
+            ))
+            fig.update_layout(
+                title=f"{ticker} Stock Chart with Buy Low, Sell High Signals",
+                xaxis_title="Date",
+                yaxis_title="Price",
+                legend_title="Signals"
+            )
             st.plotly_chart(fig, use_container_width=True)
             st.dataframe(processed_data.tail())
             st.success("✅ Stock data and chart updated!")
             
             # -------------------------
-            # Backtest the Combined Strategy on Historical Data
-            st.subheader(f"📈 Backtest: Combined Indicator Strategy for {ticker}")
+            # Backtest the Buy Low, Sell High Strategy on Historical Data
+            st.subheader(f"📈 Backtest: Buy Low, Sell High Strategy for {ticker}")
             backtest_data = historical_data  # Use historical data for backtesting
-            bt_results = backtest_combined_strategy(backtest_data)
+            bt_results = backtest_buy_low_sell_high(backtest_data)
             if not bt_results.empty:
                 bt_fig = go.Figure()
-    
-                # Plot Buy & Hold benchmark
                 bt_fig.add_trace(go.Scatter(
                     x=bt_results.index,
                     y=bt_results['Cum_Market_Return'],
@@ -447,18 +434,14 @@ async def main():
                     line=dict(color='royalblue', width=3),
                     hovertemplate='%{x|%Y-%m-%d}<br>Buy & Hold: %{y:.2f}<extra></extra>'
                 ))
-    
-                # Plot Combined Strategy
                 bt_fig.add_trace(go.Scatter(
                     x=bt_results.index,
                     y=bt_results['Cum_Strategy_Return'],
                     mode='lines',
-                    name='Combined Strategy',
+                    name='Buy Low, Sell High Strategy',
                     line=dict(color='firebrick', width=3),
                     hovertemplate='%{x|%Y-%m-%d}<br>Strategy: %{y:.2f}<extra></extra>'
                 ))
-    
-                # Update layout for clarity
                 bt_fig.update_layout(
                     title={
                         'text': f"Cumulative Returns Comparison: {ticker}",
@@ -473,19 +456,15 @@ async def main():
                     hovermode="x unified",
                     template="plotly_white"
                 )
-    
-                # Add annotation explaining the chart
                 bt_fig.add_annotation(
-                    text="Blue line: Buy & Hold<br>Red line: Combined Strategy",
+                    text="Blue line: Buy & Hold<br>Red line: Buy Low, Sell High Strategy",
                     xref="paper", yref="paper",
                     x=0.5, y=-0.15, showarrow=False,
                     font=dict(size=12)
                 )
-    
                 st.plotly_chart(bt_fig, use_container_width=True)
             else:
                 st.write("⚠️ Backtest data not available.")
-
 
 if __name__ == "__main__":
     asyncio.run(main())
