@@ -399,10 +399,10 @@ async def main():
             sell_signals = processed_data[processed_data['Sell_Signal_Combined'] == True]
 
             fig.add_trace(go.Scatter(x=buy_signals['Date'], y=buy_signals['Close'],
-                                     mode='markers', marker=dict(color='green', symbol='triangle-up'),
+                                     mode='markers', marker=dict(color='green', symbol='triangle-up', size=14),
                                      name='Buy Signals'))
             fig.add_trace(go.Scatter(x=sell_signals['Date'], y=sell_signals['Close'],
-                                     mode='markers', marker=dict(color='red', symbol='triangle-down'),
+                                     mode='markers', marker=dict(color='red', symbol='triangle-down', size=14),
                                      name='Sell Signals'))
 
             # Update layout for better visualization
