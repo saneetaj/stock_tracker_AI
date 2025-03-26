@@ -396,7 +396,7 @@ async def main():
             )
             st.plotly_chart(fig, use_container_width=True)
             #st.dataframe(processed_data.tail())
-            st.success("✅ Stock data and chart updated!")
+            #st.success("✅ Stock data and chart updated!")
             
             # -------------------------
             # Backtest the Buy Low, Sell High Strategy on Historical Data
