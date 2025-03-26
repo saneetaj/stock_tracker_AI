@@ -487,7 +487,7 @@ async def main():
                 st.plotly_chart(fig_nn, use_container_width=True)
 
 # Neural Network Forecasting Function with Fix
-def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 20, future_steps: int = 5) -> pd.DataFrame:
+def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 10, future_steps: int = 5) -> pd.DataFrame:
     """
     Trains a simple LSTM model on historical daily closing prices and forecasts future_steps days.
     Returns a DataFrame with forecasted dates and predicted closing prices.
