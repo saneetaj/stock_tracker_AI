@@ -243,12 +243,16 @@ def generate_signals(data: pd.DataFrame) -> pd.DataFrame:
     """
     try:
         # Basic Buy/Sell Signals based on SMA and RSI
-        data["Buy_Signal"] = (data["Close"] > data["SMA_50"]) & (
-            data["RSI"] < 30
-        )  # Buy if price above SMA and RSI is oversold
-        data["Sell_Signal"] = (data["Close"] < data["SMA_50"]) & (
-            data["RSI"] > 70
-        )  # Sell if price below SMA and RSI is overbought
+        data["Buy_Signal"] = (
+            (data["Close"] > data["SMA_50"]) &  # Price above SMA
+            (data["RSI"] < 40) &  # RSI is not too high (less than 40 instead of 30)
+            (data["MACD"] > data["MACD_Signal"]) # MACD above signal
+        )
+        data["Sell_Signal"] = (
+            (data["Close"] < data["SMA_50"]) &  # Price below SMA
+            (data["RSI"] > 60) & # RSI is not too low (greater than 60 instead of 70)
+            (data["MACD"] < data["MACD_Signal"]) # MACD below signal
+        )
 
         # Additional signals based on EMA, MACD, Bollinger Bands, and Stochastic Oscillator
         data["Buy_Signal_EMA"] = data["EMA_9"] > data["EMA_50"]  # Buy if short-term EMA is above long-term EMA
@@ -295,11 +299,11 @@ def combine_signals(data: pd.DataFrame) -> pd.DataFrame:
 
         # Define weights for each signal
         weights = {
-            "SMA_RSI": 0.4,  # Weight for SMA and RSI combined signal
-            "EMA": 0.2,
-            "MACD": 0.2,
-            "BB": 0.1,
-            "Stochastic": 0.1,
+            "SMA_RSI": 0.5,  # Increased weight
+            "EMA": 0.1,
+            "MACD": 0.3, # Increased weight
+            "BB": 0.05, # decreased weight
+            "Stochastic": 0.05, # decreased weight
         }
 
         # Calculate a combined score for buy and sell signals
