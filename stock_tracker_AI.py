@@ -9,52 +9,16 @@ import logging
 import subprocess
 import sys
 from typing import Optional, List
-
-# Configure logging
-logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# Try to import the Alpaca modules, and install if they are not present
-def install_alpaca_dependencies():
-    """
-    Installs the Alpaca SDK if it's not already installed.  Returns True if Alpaca
-    SDK is already installed, False otherwise.  Displays messages in Streamlit
-    indicating installation status.
-    """
-    try:
-        from alpaca.data.historical import StockHistoricalDataClient
-        from alpaca.data.live import StockDataClient
-        from alpaca.data.news import NewsDataClient
-        from alpaca_trade_api.rest import REST
-        return True  # Returns True if already installed
-    except ImportError:
-        st.warning("Alpaca SDK not found. Installing...")
-        try:
-            # Use subprocess to install the Alpaca SDK
-            subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'alpaca-py'])
-            st.success("Alpaca SDK installed successfully. Please rerun the app.")
-            return False  # Returns False if it just installed
-        except subprocess.CalledProcessError as e:
-            error_message = f"Error installing Alpaca SDK: {e}"
-            st.error(error_message)
-            logging.error(error_message)  # Log the error
-            return False
-        except Exception as e:
-            error_message = f"An unexpected error occurred during installation: {e}"
-            st.error(error_message)
-            logging.error(error_message)
-            return False
-
-
-# Install Alpaca dependencies and check if already installed
-if not install_alpaca_dependencies():
-    st.rerun()  # Rerun the app after installation
-
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.live import StockDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from alpaca.data.news import NewsDataClient
 from alpaca_trade_api.rest import REST
+
+
+# Configure logging
+logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load API keys from Streamlit secrets
 try:
