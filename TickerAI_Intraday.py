@@ -279,8 +279,12 @@ async def main():
     st.title("📈 Intraday Ticker AI")
     tickers_input = st.text_input("Enter stock ticker symbol(s), separated by commas", "AAPL, MSFT", key="tickers_input")
     tickers = [ticker.strip().upper() for ticker in tickers_input.split(",")]
-        
-    if st.button("🔍 Analyze"):
+    
+    # Refresh the stock quotes every 5 minutes (300000 ms) without refreshing the cached news.
+    st_autorefresh(interval=120000, limit=0, key="intraday_autorefresh")   
+    
+    #if st.button("🔍 Analyze"):
+    if tickers:
         sentiments = get_market_sentiment(tickers)
 
         for ticker in tickers:
@@ -363,5 +367,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    # Refresh the stock quotes every 5 minutes (300000 ms) without refreshing the cached news.
-    st_autorefresh(interval=120000, limit=0, key="intraday_autorefresh")
+
