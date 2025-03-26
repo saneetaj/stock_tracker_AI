@@ -414,13 +414,16 @@ async def main():
             buy_signals = processed_data[processed_data['Buy_Signal_Combined'] == True]
             sell_signals = processed_data[processed_data['Sell_Signal_Combined'] == True]
 
+            #Plotting Buy Signals
             fig.add_trace(go.Scatter(x=buy_signals['Date'], y=buy_signals['Close'],
                                      mode='markers',
-                                     marker=dict(color='green', symbol='triangle-up', size=12),  # Increased size
+                                     marker=dict(color='green', symbol='triangle-up', size=12),
                                      name='Buy Signals'))
+
+            #Plotting Sell Signals
             fig.add_trace(go.Scatter(x=sell_signals['Date'], y=sell_signals['Close'],
                                      mode='markers',
-                                     marker=dict(color='red', symbol='triangle-down', size=12),  # Increased size
+                                     marker=dict(color='red', symbol='triangle-down', size=12),
                                      name='Sell Signals'))
 
             # Update layout for better visualization
@@ -436,6 +439,11 @@ async def main():
             st.dataframe(processed_data.tail())
 
             st.success("✅ Stock data and chart updates every 5 minutes!")
+
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
 
 
 
