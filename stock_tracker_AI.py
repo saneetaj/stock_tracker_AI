@@ -364,7 +364,7 @@ async def main():
     tickers = [ticker.strip().upper() for ticker in tickers_input.split(",")]
 
     if st.button("🔍 Analyze"):
-        sentiments = get_market_sentiment(tickers)  # Assuming this is defined elsewhere
+        sentiments = get_market_sentiment(tickers)
 
         for ticker in tickers:
             if ticker in sentiments:
@@ -374,8 +374,8 @@ async def main():
             st.subheader(f"📊 Stock Data for {ticker}")
 
             # Fetch stock data
-            intraday_data = await get_intraday_data(ticker)  # Use await instead of asyncio.run
-            historical_data = get_historical_stock_data(ticker)  # Assuming this is defined elsewhere
+            intraday_data = await get_intraday_data(ticker)
+            historical_data = get_historical_stock_data(ticker)
 
             data_to_use = intraday_data if intraday_data is not None else historical_data
 
@@ -383,16 +383,41 @@ async def main():
                 st.write(f"⚠️ No data available for {ticker}")
                 continue
 
-            # You can replace calculate_indicators, generate_signals, etc. with similar steps for indicators and chart plotting
             processed_data = calculate_indicators(data_to_use)
             processed_data = generate_signals(processed_data)
             processed_data = combine_signals(processed_data)
 
-            # Example: Display the data
-            st.dataframe(processed_data.tail()) # Show the last few rows.
+            # Create the candlestick chart
+            fig = go.Figure(data=[go.Candlestick(x=processed_data['Date'],
+                                               open=processed_data['Open'],
+                                               high=processed_data['High'],
+                                               low=processed_data['Low'],
+                                               close=processed_data['Close'])])
 
-            st.success("✅ Stock data updates every 5 minutes!")
+            # Add buy/sell signals to the chart
+            buy_signals = processed_data[processed_data['Buy_Signal_Combined'] == True]
+            sell_signals = processed_data[processed_data['Sell_Signal_Combined'] == True]
 
+            fig.add_trace(go.Scatter(x=buy_signals['Date'], y=buy_signals['Close'],
+                                     mode='markers', marker=dict(color='green', symbol='triangle-up'),
+                                     name='Buy Signals'))
+            fig.add_trace(go.Scatter(x=sell_signals['Date'], y=sell_signals['Close'],
+                                     mode='markers', marker=dict(color='red', symbol='triangle-down'),
+                                     name='Sell Signals'))
+
+            # Update layout for better visualization
+            fig.update_layout(title=f"{ticker} Stock Chart with Buy/Sell Signals",
+                              xaxis_title="Date",
+                              yaxis_title="Price",
+                              legend_title="Signals")
+
+            # Display the chart
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Display the most recent data
+            st.dataframe(processed_data.tail())
+
+            st.success("✅ Stock data and chart updates every 5 minutes!")
 
 
 if __name__ == "__main__":
