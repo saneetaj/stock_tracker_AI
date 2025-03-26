@@ -288,29 +288,44 @@ def combine_signals(data: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: The DataFrame with combined buy/sell signal columns.
     """
     try:
-        # Combining all the buy signals into one: All conditions must be true for a Buy
-        data["Buy_Signal_Combined"] = (
-            data["Buy_Signal"]
-            & data["Buy_Signal_EMA"]
-            & data["Buy_Signal_MACD"]
-            & data["Buy_Signal_BB"]
-            & data["Buy_Signal_Stochastic"]
+        # Initialize combined signals to False
+        data["Buy_Signal_Combined"] = False
+        data["Sell_Signal_Combined"] = False
+
+        # Define weights for each signal
+        weights = {
+            "SMA_RSI": 0.4,  # Weight for SMA and RSI combined signal
+            "EMA": 0.2,
+            "MACD": 0.2,
+            "BB": 0.1,
+            "Stochastic": 0.1,
+        }
+
+        # Calculate a combined score for buy and sell signals
+        data["Buy_Score"] = (
+            (data["Buy_Signal"] & (data["RSI"] < 30)).astype(int) * weights["SMA_RSI"] + # Combining SMA and RSI for Buy
+            data["Buy_Signal_EMA"].astype(int) * weights["EMA"] +
+            data["Buy_Signal_MACD"].astype(int) * weights["MACD"] +
+            data["Buy_Signal_BB"].astype(int) * weights["BB"] +
+            data["Buy_Signal_Stochastic"].astype(int) * weights["Stochastic"]
+        )
+        data["Sell_Score"] = (
+            (data["Sell_Signal"] & (data["RSI"] > 70)).astype(int) * weights["SMA_RSI"] + # Combining SMA and RSI for Sell
+            data["Sell_Signal_EMA"].astype(int) * weights["EMA"] +
+            data["Sell_Signal_MACD"].astype(int) * weights["MACD"] +
+            data["Sell_Signal_BB"].astype(int) * weights["BB"] +
+            data["Sell_Signal_Stochastic"].astype(int) * weights["Stochastic"]
         )
 
-        # Combining all the sell signals into one: Any of the conditions being true will trigger a Sell
-        data["Sell_Signal_Combined"] = (
-            data["Sell_Signal"]
-            | data["Sell_Signal_EMA"]
-            | data["Sell_Signal_MACD"]
-            | data["Sell_Signal_BB"]
-            | data["Sell_Signal_Stochastic"]
-        )
+        # Generate combined buy/sell signals based on the scores
+        data["Buy_Signal_Combined"] = data["Buy_Score"] >= 0.7  # Buy if the combined score is high
+        data["Sell_Signal_Combined"] = data["Sell_Score"] >= 0.7 # Sell if combined score is high
+
         return data
     except Exception as e:
         st.error(f"Error in combine_signals: {e}")
         logging.error(f"Error in combine_signals: {e}")
         return pd.DataFrame()  # return empty dataframe
-
 
 # Function to fetch stock news from Finnhub
 def get_stock_news(ticker):
