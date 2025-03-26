@@ -295,7 +295,7 @@ def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 20, future_st
         pred = model.predict(current_input, verbose=0)
         predictions.append(pred[0,0])
         # Append prediction and slide window
-        current_input = np.append(current_input[:,1:,:], [[pred]], axis=1)
+        current_input = np.append(current_input[:, 1:, :], np.array([[pred]]).reshape(1, 1, 1), axis=1)
 
     # Inverse transform predictions
     predictions = scaler.inverse_transform(np.array(predictions).reshape(-1, 1)).flatten()
