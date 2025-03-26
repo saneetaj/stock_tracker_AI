@@ -270,17 +270,23 @@ def generate_combined_signals(data: pd.DataFrame) -> pd.DataFrame:
     Adjusted combined signals using additional indicators.
     
     BUY conditions (in a bullish trend):
-      - Trend: SMA_50 > SMA_200 and ADX > 25 (indicates a strong trend)
+      - Trend: SMA_50 > SMA_200 and ADX > 25
       - Price pullback: Close is at least 2% below SMA_50 (i.e. Close < 0.98 * SMA_50)
-      - RSI: Below 50 (suggesting a pullback)
-      - MACD: MACD > MACD_Signal (momentum confirmation)
-      - CCI: Below -100 (indicating oversold conditions)
+      - RSI: Below 50
+      - MACD: MACD > MACD_Signal
+      - CCI: Below -100
       
     SELL conditions:
       - Either trend reversal: SMA_50 < SMA_200 or ADX < 25
-      - Or in a bullish trend, when price rallies above SMA_50 by at least 2% and RSI > 50.
+      - Or in bullish trend, when price rallies above SMA_50 by at least 2% and RSI > 50.
     """
     data = data.copy()
+    
+    # Ensure necessary indicator columns exist; if not, calculate them.
+    required_cols = ["SMA_50", "SMA_200", "ADX", "RSI", "MACD", "MACD_Signal", "CCI"]
+    missing_cols = [col for col in required_cols if col not in data.columns]
+    if missing_cols:
+        data = calculate_indicators(data)
     
     # Initialize signals
     data["Buy_Signal_Combined"] = False
@@ -305,6 +311,35 @@ def generate_combined_signals(data: pd.DataFrame) -> pd.DataFrame:
     data.loc[sell_condition, "Sell_Signal_Combined"] = True
     
     return data
+
+def backtest_combined_strategy(data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Backtests the adjusted strategy:
+      - Positions are taken on the next day's open (simulated via a shifted signal).
+      - We assume that when a buy signal is triggered, the position is entered and held until a sell signal.
+      - Cumulative returns for the strategy and a buy & hold benchmark are calculated.
+    """
+    df = data.copy().set_index("Date")
+    # Ensure indicators are computed on the data
+    df = calculate_indicators(df.reset_index()).set_index("Date")
+    # Generate signals on the data
+    df = generate_combined_signals(df.reset_index()).set_index("Date")
+    
+    # Create a "Position" series:
+    # We assume that a buy signal starts a long position and a sell signal ends it.
+    df["Signal"] = 0
+    df.loc[df["Buy_Signal_Combined"], "Signal"] = 1
+    df.loc[df["Sell_Signal_Combined"], "Signal"] = 0
+    # Use forward-fill to simulate holding the position until an exit signal.
+    df["Position"] = df["Signal"].replace(to_replace=0, method='ffill').shift(1).fillna(0)
+    
+    # Compute returns
+    df["Market_Return"] = df["Close"].pct_change()
+    df["Strategy_Return"] = df["Market_Return"] * df["Position"]
+    df["Cum_Market_Return"] = (1 + df["Market_Return"]).cumprod()
+    df["Cum_Strategy_Return"] = (1 + df["Strategy_Return"]).cumprod()
+    
+    return df
 
 def backtest_combined_strategy(data: pd.DataFrame) -> pd.DataFrame:
     """
