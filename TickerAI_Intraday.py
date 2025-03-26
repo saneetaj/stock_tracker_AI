@@ -364,4 +364,4 @@ async def main():
 if __name__ == "__main__":
     asyncio.run(main())
     # Refresh the stock quotes every 5 minutes (300000 ms) without refreshing the cached news.
-    st_autorefresh(interval=300000, limit=0, key="intraday_autorefresh")
+    st_autorefresh(interval=120000, limit=0, key="intraday_autorefresh")
