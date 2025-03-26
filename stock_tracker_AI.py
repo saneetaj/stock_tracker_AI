@@ -42,7 +42,7 @@ except openai.OpenAIError as e:
 
 # Initialize Alpaca data client
 try:
-    historical_client = StockHistoricalDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key, feed="iex")
+    historical_client = StockHistoricalDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
     live_stream = StockDataStream(api_key=alpaca_api_key, secret_key=alpaca_secret_key, data_feed="iex")
     print(f"live_stream after init: {live_stream}")  # ADDED DEBUG PRINT
 except Exception as e:
