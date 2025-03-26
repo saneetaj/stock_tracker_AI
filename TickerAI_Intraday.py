@@ -282,8 +282,7 @@ async def main():
         
     if st.button("🔍 Analyze"):
         sentiments = get_market_sentiment(tickers)
-        # Refresh the stock quotes every 5 minutes (300000 ms) without refreshing the cached news.
-        st_autorefresh(interval=300000, limit=0, key="intraday_autorefresh")
+
         for ticker in tickers:
             if ticker in sentiments:
                 st.sidebar.subheader(f"📢 Sentiment for {ticker}")
@@ -364,3 +363,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+    # Refresh the stock quotes every 5 minutes (300000 ms) without refreshing the cached news.
+    st_autorefresh(interval=300000, limit=0, key="intraday_autorefresh")
