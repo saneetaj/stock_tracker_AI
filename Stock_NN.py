@@ -371,7 +371,7 @@ def get_market_sentiment(tickers: List[str]) -> dict:
 # Streamlit UI
 
 async def main():
-    st.title("📈 Intraday Ticker AI with Neural-Network Forecast")
+    st.title("📈 Buy/Sell Strategy Signals using Technical Indicators with Neural-Network Forecast")
     tickers_input = st.text_input("Enter stock ticker symbol(s), separated by commas", "AAPL", key="tickers_input")
     tickers = [ticker.strip().upper() for ticker in tickers_input.split(",") if ticker.strip()]
 
@@ -425,7 +425,7 @@ async def main():
             )
             st.plotly_chart(fig, use_container_width=True)
 
-            st.subheader(f"📈 Intraday Backtest for {ticker}")
+            st.subheader(f"📈 Strategy Backtest for {ticker}")
             bt_results = backtest_intraday_strategy(intraday_data)
             if not bt_results.empty:
                 bt_fig = go.Figure()
