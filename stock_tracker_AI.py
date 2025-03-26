@@ -6,25 +6,47 @@ import time
 import plotly.graph_objects as go
 import requests
 import logging
-from alpaca.data.historical import StockHistoricalDataClient
+import subprocess  # Import subprocess
+import sys # Import sys
+from typing import Optional, List
+
+# Try to import the Alpaca modules, and install if they are not present
+def install_alpaca_dependencies():
+    try:
+        from alpaca.data.historical import StockHistoricalDataClient
+        from alpaca.data.live import StockDataClient
+        from alpaca.data.news import NewsDataClient
+        from alpaca_trade_api.rest import REST
+        return True # Returns True if already installed
+    except ImportError:
+        st.warning("Alpaca SDK not found. Installing...")
+        try:
+            # Use subprocess to install the Alpaca SDK
+            subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'alpaca-py'])
+            st.success("Alpaca SDK installed successfully. Please rerun the app.")
+            return False # Returns False if it just installed
+        except subprocess.CalledProcessError as e:
+            st.error(f"Error installing Alpaca SDK: {e}")
+            return False
+
+# Install Alpaca dependencies and check if already installed
+if not install_alpaca_dependencies():
+    st.stop()  # Stop the app if installation is needed or fails.
+
+from alpaca.data.historical import StockHistoricalDataClient # Import after installation
 from alpaca.data.live import StockDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from alpaca.data.news import NewsDataClient
 from alpaca_trade_api.rest import REST
-from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import GetAssetsRequest
-from typing import Optional, List
 
 # Load API keys from Streamlit secrets
 openai_api_key = st.secrets["openai_api_key"]
 alpaca_api_key = st.secrets["alpaca_api_key"]
 alpaca_secret_key = st.secrets["alpaca_secret_key"]
 
-trading_client = TradingClient('api-key', 'secret-key')
-
 # Initialize OpenAI client
-openai_client = openai.OpenAI(api_key=openai_api_key) # Changed to openai.OpenAI
+openai_client = openai.OpenAI(api_key=openai_api_key)
 
 # Initialize Alpaca data client
 historical_client = StockHistoricalDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
