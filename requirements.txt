@@ -14,3 +14,5 @@ typing
 alpaca-py
 asyncio
 streamlit_autorefresh
+tensorflow
+sklearn
