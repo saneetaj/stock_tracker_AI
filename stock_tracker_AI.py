@@ -149,7 +149,7 @@ def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
             symbol_or_symbols=[ticker],
             start=start_date,
             end=end_date,
-            timeframe=TimeFrame.Minute60,  # 60-minute interval
+            timeframe=TimeFrame.Hour,  # 60-minute interval
         )
 
         # Get the bars
