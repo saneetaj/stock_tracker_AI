@@ -371,8 +371,8 @@ def get_market_sentiment(tickers: List[str]) -> dict:
 # Streamlit UI
 
 async def main():
-    st.title("📈 Intraday Ticker AI with Neural Forecast")
-    tickers_input = st.text_input("Enter stock ticker symbol(s), separated by commas", "AAPL, MSFT", key="tickers_input")
+    st.title("📈 Intraday Ticker AI with Neural-Network Forecast")
+    tickers_input = st.text_input("Enter stock ticker symbol(s), separated by commas", "AAPL", key="tickers_input")
     tickers = [ticker.strip().upper() for ticker in tickers_input.split(",") if ticker.strip()]
 
     # Auto-refresh stock quotes every 5 minutes
