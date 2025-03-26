@@ -423,7 +423,7 @@ async def main():
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=processed_data['Date'], y=processed_data['Close'],
                                      mode='lines',
-                                     name='Close Price')) # Added name for close price
+                                     name='Close Price',showlegend=True)) # Added name for close price
 
             # Add buy/sell signals to the chart
             buy_signals = processed_data[processed_data['Buy_Signal_Combined'] == True]
@@ -433,13 +433,13 @@ async def main():
             fig.add_trace(go.Scatter(x=buy_signals['Date'], y=buy_signals['Close'],
                                      mode='markers',
                                      marker=dict(color='green', symbol='triangle-up', size=12),
-                                     name='Buy Signals')) # Added name
+                                     name='Buy Signals',showlegend=True)) # Added name
 
             #Plotting Sell Signals
             fig.add_trace(go.Scatter(x=sell_signals['Date'], y=sell_signals['Close'],
                                      mode='markers',
                                      marker=dict(color='red', symbol='triangle-down', size=12),
-                                     name='Sell Signals')) # Added name
+                                     name='Sell Signals',showlegend=True)) # Added name
 
             # Update layout for better visualization
             fig.update_layout(title=f"{ticker} Stock Chart with Buy/Sell Signals",
