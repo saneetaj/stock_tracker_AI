@@ -395,7 +395,7 @@ async def main():
                 legend_title="Signals"
             )
             st.plotly_chart(fig, use_container_width=True)
-            st.dataframe(processed_data.tail())
+            #st.dataframe(processed_data.tail())
             st.success("✅ Stock data and chart updated!")
             
             # -------------------------
