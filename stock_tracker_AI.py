@@ -185,7 +185,7 @@ def calculate_indicators(data: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: The DataFrame with added technical indicators.
     """
     try:
-        data["SMA_20"] = data["Close"].rolling(window=20).mean()
+        data["SMA_50"] = data["Close"].rolling(window=50).mean()
         data["RSI"] = 100 - (100 / (1 + data["Close"].pct_change().rolling(window=14).mean()))
         # Exponential Moving Average (EMA)
         # Shorter period EMA crossing above longer period EMA can be a Buy signal (bullish trend)
@@ -194,9 +194,10 @@ def calculate_indicators(data: pd.DataFrame) -> pd.DataFrame:
         data["EMA_50"] = data["Close"].ewm(span=50, adjust=False).mean()
 
         # MACD (12-26-9)
-        # MACD crossing above the signal line can be a Buy signal (bullish crossover)
         # MACD crossing below the signal line can be a Sell signal (bearish crossover)
-        data["MACD"] = data["EMA_9"] - data["EMA_50"]
+        data["EMA_12"] = data["Close"].ewm(span=12, adjust=False).mean()  # 12-day EMA
+        data["EMA_26"] = data["Close"].ewm(span=26, adjust=False).mean()  # 26-day EMA
+        data["MACD"] = data["EMA_12"] - data["EMA_26"]
         data["MACD_Signal"] = data["MACD"].ewm(span=9, adjust=False).mean()
 
         # Bollinger Bands (20-period)
