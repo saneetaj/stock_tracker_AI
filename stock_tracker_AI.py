@@ -437,17 +437,55 @@ async def main():
             bt_results = backtest_combined_strategy(backtest_data)
             if not bt_results.empty:
                 bt_fig = go.Figure()
-                bt_fig.add_trace(go.Scatter(x=bt_results.index, y=bt_results['Cum_Market_Return'],
-                                            mode='lines', name='Buy & Hold', showlegend=True))
-                bt_fig.add_trace(go.Scatter(x=bt_results.index, y=bt_results['Cum_Strategy_Return'],
-                                            mode='lines', name='Combined Strategy', showlegend=True))
-                bt_fig.update_layout(title=f"Cumulative Returns: {ticker}",
-                                     xaxis_title="Date",
-                                     yaxis_title="Cumulative Return",
-                                     legend_title="Strategy")
+    
+                # Plot Buy & Hold benchmark
+                bt_fig.add_trace(go.Scatter(
+                    x=bt_results.index,
+                    y=bt_results['Cum_Market_Return'],
+                    mode='lines',
+                    name='Buy & Hold',
+                    line=dict(color='royalblue', width=3),
+                    hovertemplate='%{x|%Y-%m-%d}<br>Buy & Hold: %{y:.2f}<extra></extra>'
+                ))
+    
+                # Plot Combined Strategy
+                bt_fig.add_trace(go.Scatter(
+                    x=bt_results.index,
+                    y=bt_results['Cum_Strategy_Return'],
+                    mode='lines',
+                    name='Combined Strategy',
+                    line=dict(color='firebrick', width=3),
+                    hovertemplate='%{x|%Y-%m-%d}<br>Strategy: %{y:.2f}<extra></extra>'
+                ))
+    
+                # Update layout for clarity
+                bt_fig.update_layout(
+                    title={
+                        'text': f"Cumulative Returns Comparison: {ticker}",
+                        'y':0.95,
+                        'x':0.5,
+                        'xanchor': 'center',
+                        'yanchor': 'top'
+                    },
+                    xaxis_title="Date",
+                    yaxis_title="Cumulative Return",
+                    legend_title="Legend",
+                    hovermode="x unified",
+                    template="plotly_white"
+                )
+    
+                # Add annotation explaining the chart
+                bt_fig.add_annotation(
+                    text="Blue line: Buy & Hold<br>Red line: Combined Strategy",
+                    xref="paper", yref="paper",
+                    x=0.5, y=-0.15, showarrow=False,
+                    font=dict(size=12)
+                )
+    
                 st.plotly_chart(bt_fig, use_container_width=True)
             else:
                 st.write("⚠️ Backtest data not available.")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
