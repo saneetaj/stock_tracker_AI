@@ -371,7 +371,7 @@ def get_market_sentiment(tickers: List[str]) -> dict:
 # Streamlit UI
 
 async def main():
-    st.title("📈 Buy/Sell Strategy Signals using Technical Indicators with Neural-Network Forecast")
+    st.title("📈 Technical Strategy Signals with Neural-Network Forecast")
     tickers_input = st.text_input("Enter stock ticker symbol(s), separated by commas", "AAPL", key="tickers_input")
     tickers = [ticker.strip().upper() for ticker in tickers_input.split(",") if ticker.strip()]
 
