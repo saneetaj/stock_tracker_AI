@@ -9,6 +9,7 @@ import logging
 import subprocess
 import sys
 import finnhub
+import asyncio
 from typing import Optional, List
 from alpaca.data.historical import StockHistoricalDataClient
 #from alpaca.data.live import StockDataClient
