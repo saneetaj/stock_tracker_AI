@@ -108,7 +108,7 @@ def calculate_intraday_indicators(data: pd.DataFrame) -> pd.DataFrame:
     data["Date"] = pd.to_datetime(data["Date"])
     # Assume raw data is in UTC; convert to US/Eastern
     if data["Date"].dt.tz is None:
-        data["Date"] = data["Date"].dt.tz_localize("UTC").dt.tz_convert("US/Eastern")
+        data["Date"] = data["Date"].dt.tz_convert("UTC").dt.tz_convert("US/Eastern")
     else:
         data["Date"] = data["Date"].dt.tz_convert("US/Eastern")
     data.sort_values("Date", inplace=True)
@@ -185,7 +185,7 @@ def get_intraday_stock_data(ticker: str, days: int = 1) -> Optional[pd.DataFrame
             } for bar in bars_list])
             df["Date"] = pd.to_datetime(df["Date"])
             if df["Date"].dt.tz is None:
-                df["Date"] = df["Date"].dt.tz_localize("UTC").dt.tz_convert("US/Eastern")
+                df["Date"] = df["Date"].dt.tz_convert("UTC").dt.tz_convert("US/Eastern")
             else:
                 df["Date"] = df["Date"].dt.tz_convert("US/Eastern")
             # Filter to regular market hours: 9:30 to 16:00 ET
@@ -234,7 +234,7 @@ def get_historical_stock_data(ticker: str, days: int = 365) -> Optional[pd.DataF
             } for bar in bars_list])
             df["Date"] = pd.to_datetime(df["Date"])
             if df["Date"].dt.tz is None:
-                df["Date"] = df["Date"].dt.tz_localize("UTC").dt.tz_convert("US/Eastern")
+                df["Date"] = df["Date"].dt.tz_convert("UTC").dt.tz_convert("US/Eastern")
             else:
                 df["Date"] = df["Date"].dt.tz_convert("US/Eastern")
             df.sort_values("Date", inplace=True)
@@ -313,7 +313,7 @@ def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 20, future_st
         "Date": forecast_dates,
         "Predicted_Close": predictions
     })
-    forecast_df["Date"] = pd.to_datetime(forecast_df["Date"]).dt.tz_localize("US/Eastern")
+    forecast_df["Date"] = pd.to_datetime(forecast_df["Date"]).dt.tz_convert("US/Eastern")
     return forecast_df
 
 # ------------------------------------
@@ -533,7 +533,7 @@ def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 20, future_st
         "Date": forecast_dates,
         "Predicted_Close": predictions
     })
-    forecast_df["Date"] = pd.to_datetime(forecast_df["Date"]).dt.tz_localize("US/Eastern")
+    forecast_df["Date"] = pd.to_datetime(forecast_df["Date"]).dt.tz_convert("US/Eastern")
     return forecast_df
 
 def prepare_data(series: np.ndarray, window_size: int) -> (np.ndarray, np.ndarray):
