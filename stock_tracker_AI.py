@@ -352,7 +352,7 @@ def get_market_sentiment(tickers):
             try:
                 prompt = f"Analyze the market sentiment for {ticker} in the below news. :\n{news_data}\nProvide a brief summary (bullish, bearish, or neutral) with key reasons. Strictly limit the summary to 250 words max."
 
-                response = client.chat.completions.create(
+                response = openai_client.chat.completions.create(
                     model="gpt-4",
                     messages=[
                         {"role": "system", "content": "You are a financial news analyst."},
@@ -387,9 +387,9 @@ def main():
     """
     st.title("📈 Ticker AI")
 
-    # User input for multiple stock tickers
-    tickers = st.text_input("Enter stock ticker symbol", "AAPL")
-    tickers = [ticker.strip().upper() for ticker in tickers.split(",")]
+   # User input for multiple stock tickers
+    tickers_input = st.text_input("Enter stock ticker symbol(s), separated by commas", "AAPL, MSFT, GOOG")
+    tickers = [ticker.strip().upper() for ticker in tickers_input.split(",")]
 
     # "Analyze" button to trigger stock tracking
     if st.button("🔍 Analyze"):
