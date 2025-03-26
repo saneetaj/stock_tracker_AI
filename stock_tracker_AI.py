@@ -178,7 +178,48 @@ async def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
         return None
 
 # -------------------------
-# Indicator and Signal Functions
+def compute_adx(data: pd.DataFrame, period: int = 14) -> pd.Series:
+    """
+    Computes the Average Directional Index (ADX) to gauge trend strength.
+    """
+    # Calculate True Range (TR)
+    high_low = data["High"] - data["Low"]
+    high_prev_close = (data["High"] - data["Close"].shift()).abs()
+    low_prev_close = (data["Low"] - data["Close"].shift()).abs()
+    tr = high_low.combine(high_prev_close, max).combine(low_prev_close, max)
+    
+    # Calculate directional movements
+    up_move = data["High"] - data["High"].shift()
+    down_move = data["Low"].shift() - data["Low"]
+    
+    plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
+    minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
+    
+    # Smooth the TR, +DM, and -DM using a rolling sum (simple smoothing)
+    tr_smooth = tr.rolling(window=period, min_periods=period).sum()
+    plus_dm_smooth = plus_dm.rolling(window=period, min_periods=period).sum()
+    minus_dm_smooth = minus_dm.rolling(window=period, min_periods=period).sum()
+    
+    # Calculate the directional indicators
+    plus_di = 100 * (plus_dm_smooth / tr_smooth)
+    minus_di = 100 * (minus_dm_smooth / tr_smooth)
+    
+    # Compute the Directional Index (DX)
+    dx = (abs(plus_di - minus_di) / (plus_di + minus_di)) * 100
+    # ADX is the rolling average of DX
+    adx = dx.rolling(window=period, min_periods=period).mean()
+    return adx
+
+def compute_cci(data: pd.DataFrame, period: int = 20) -> pd.Series:
+    """
+    Computes the Commodity Channel Index (CCI).
+    """
+    # Typical Price
+    tp = (data["High"] + data["Low"] + data["Close"]) / 3.0
+    sma_tp = tp.rolling(window=period, min_periods=period).mean()
+    mad = tp.rolling(window=period, min_periods=period).apply(lambda x: pd.Series(x).mad())
+    cci = (tp - sma_tp) / (0.015 * mad)
+    return cci
 
 def calculate_indicators(data: pd.DataFrame) -> pd.DataFrame:
     """
@@ -188,6 +229,8 @@ def calculate_indicators(data: pd.DataFrame) -> pd.DataFrame:
       - MACD (12,26) and its signal line (9)
       - Bollinger Bands (20-day)
       - Stochastic Oscillator (14,3)
+      - ADX (14)
+      - CCI (20)
     """
     try:
         data["Date"] = pd.to_datetime(data["Date"])
@@ -212,6 +255,10 @@ def calculate_indicators(data: pd.DataFrame) -> pd.DataFrame:
         data["Stoch_Low"] = data["Low"].rolling(window=14).min()
         data["Stochastic_K"] = 100 * ((data["Close"] - data["Stoch_Low"]) / (data["Stoch_High"] - data["Stoch_Low"]))
         data["Stochastic_D"] = data["Stochastic_K"].rolling(window=3).mean()
+        # ADX
+        data["ADX"] = compute_adx(data, period=14)
+        # CCI
+        data["CCI"] = compute_cci(data, period=20)
         return data
     except Exception as e:
         st.error(f"Error in calculate_indicators: {e}")
@@ -220,87 +267,71 @@ def calculate_indicators(data: pd.DataFrame) -> pd.DataFrame:
 
 def generate_combined_signals(data: pd.DataFrame) -> pd.DataFrame:
     """
-    Combines multiple indicator signals into one buy/sell decision.
+    Adjusted combined signals using additional indicators.
     
-    For a BUY signal, we require:
-      - Trend confirmation: SMA_50 > SMA_200 and RSI > 50.
-      - Momentum confirmation: MACD above its signal line.
-      - Optionally, oversold conditions: Price near or below the lower Bollinger Band or a low Stochastic_K.
+    BUY conditions (in a bullish trend):
+      - Trend: SMA_50 > SMA_200 and ADX > 25 (indicates a strong trend)
+      - Price pullback: Close is at least 2% below SMA_50 (i.e. Close < 0.98 * SMA_50)
+      - RSI: Below 50 (suggesting a pullback)
+      - MACD: MACD > MACD_Signal (momentum confirmation)
+      - CCI: Below -100 (indicating oversold conditions)
       
-    Each component is given a weight and the combined score must exceed a threshold.
+    SELL conditions:
+      - Either trend reversal: SMA_50 < SMA_200 or ADX < 25
+      - Or in a bullish trend, when price rallies above SMA_50 by at least 2% and RSI > 50.
     """
-    try:
-        data = data.copy()
-        # Initialize scores
-        data["Buy_Score"] = 0
-        data["Sell_Score"] = 0
-        
-        # Define weights for each indicator
-        weights = {
-            "trend": 0.5,      # SMA & RSI conditions
-            "macd": 0.3,       # MACD condition
-            "bollinger": 0.1,  # Bollinger condition
-            "stochastic": 0.1  # Stochastic condition
-        }
-        
-        # Trend: Buy if SMA_50 > SMA_200 and RSI > 50; Sell if opposite.
-        trend_buy = ((data["SMA_50"] > data["SMA_200"]) & (data["RSI"] > 50)).astype(int)
-        trend_sell = ((data["SMA_50"] < data["SMA_200"]) & (data["RSI"] < 50)).astype(int)
-        
-        # MACD: Buy if MACD > MACD_Signal; Sell if MACD < MACD_Signal.
-        macd_buy = (data["MACD"] > data["MACD_Signal"]).astype(int)
-        macd_sell = (data["MACD"] < data["MACD_Signal"]).astype(int)
-        
-        # Bollinger: Consider buy if Close is near or below the lower band (oversold); sell if above upper band.
-        bb_buy = (data["Close"] < data["BB_Lower"]).astype(int)
-        bb_sell = (data["Close"] > data["BB_Upper"]).astype(int)
-        
-        # Stochastic: Buy if Stochastic_K < 20 and K > D (oversold condition); Sell if Stochastic_K > 80 and K < D.
-        stoch_buy = ((data["Stochastic_K"] < 20) & (data["Stochastic_K"] > data["Stochastic_D"])).astype(int)
-        stoch_sell = ((data["Stochastic_K"] > 80) & (data["Stochastic_K"] < data["Stochastic_D"])).astype(int)
-        
-        # Calculate weighted scores
-        data["Buy_Score"] = (trend_buy * weights["trend"] +
-                             macd_buy * weights["macd"] +
-                             bb_buy * weights["bollinger"] +
-                             stoch_buy * weights["stochastic"])
-        data["Sell_Score"] = (trend_sell * weights["trend"] +
-                              macd_sell * weights["macd"] +
-                              bb_sell * weights["bollinger"] +
-                              stoch_sell * weights["stochastic"])
-        
-        # Set thresholds for signals; you can adjust these thresholds as needed.
-        data["Buy_Signal_Combined"] = data["Buy_Score"] >= 0.7
-        data["Sell_Signal_Combined"] = data["Sell_Score"] >= 0.5
-        
-        return data
-    except Exception as e:
-        st.error(f"Error in generate_combined_signals: {e}")
-        logging.error(f"Error in generate_combined_signals: {e}")
-        return pd.DataFrame()
+    data = data.copy()
+    
+    # Initialize signals
+    data["Buy_Signal_Combined"] = False
+    data["Sell_Signal_Combined"] = False
+    
+    # Bullish trend condition: SMA_50 > SMA_200 and ADX > 25
+    bullish_trend = (data["SMA_50"] > data["SMA_200"]) & (data["ADX"] > 25)
+    
+    # Buy condition: In bullish trend, price pullback, low RSI, MACD confirmation, and oversold CCI.
+    buy_condition = bullish_trend & \
+                    (data["Close"] < 0.98 * data["SMA_50"]) & \
+                    (data["RSI"] < 50) & \
+                    (data["MACD"] > data["MACD_Signal"]) & \
+                    (data["CCI"] < -100)
+    
+    # Sell condition: Either trend reversal or in bullish trend when price rallies above SMA_50 and RSI > 50.
+    trend_reversal = (data["SMA_50"] < data["SMA_200"]) | (data["ADX"] < 25)
+    rally_condition = bullish_trend & (data["Close"] > 1.02 * data["SMA_50"]) & (data["RSI"] > 50)
+    sell_condition = trend_reversal | rally_condition
+    
+    data.loc[buy_condition, "Buy_Signal_Combined"] = True
+    data.loc[sell_condition, "Sell_Signal_Combined"] = True
+    
+    return data
 
 def backtest_combined_strategy(data: pd.DataFrame) -> pd.DataFrame:
     """
-    Backtests the combined indicator strategy.
-    - Trades are simulated at the next day's open using a shifted signal.
-    - Cumulative returns for the strategy and a buy & hold baseline are calculated.
+    Backtests the adjusted strategy:
+      - Positions are taken on the next day's open (simulated via a shifted signal).
+      - We assume that when a buy signal is triggered, the position is entered and held until a sell signal.
+      - Cumulative returns for the strategy and a buy & hold benchmark are calculated.
     """
-    try:
-        df = data.copy().set_index("Date")
-        # Generate combined signals on the data
-        df = generate_combined_signals(df.reset_index()).set_index("Date")
-        # Create positions (1 for long, 0 for flat) by shifting the combined buy signal.
-        df["Position"] = df["Buy_Signal_Combined"].shift(1).fillna(0)
-        df["Market_Return"] = df["Close"].pct_change()
-        df["Strategy_Return"] = df["Market_Return"] * df["Position"]
-        df["Cum_Market_Return"] = (1 + df["Market_Return"]).cumprod()
-        df["Cum_Strategy_Return"] = (1 + df["Strategy_Return"]).cumprod()
-        return df
-    except Exception as e:
-        st.error(f"Error in backtest_combined_strategy: {e}")
-        logging.error(f"Error in backtest_combined_strategy: {e}")
-        return pd.DataFrame()
-
+    df = data.copy().set_index("Date")
+    # Generate signals on the data
+    df = generate_combined_signals(df.reset_index()).set_index("Date")
+    
+    # Create a "Position" series:
+    # We assume that a buy signal starts a long position and a sell signal ends it.
+    df["Signal"] = 0
+    df.loc[df["Buy_Signal_Combined"], "Signal"] = 1
+    df.loc[df["Sell_Signal_Combined"], "Signal"] = 0
+    # Use forward-fill to simulate holding the position until an exit signal.
+    df["Position"] = df["Signal"].replace(to_replace=0, method='ffill').shift(1).fillna(0)
+    
+    # Compute returns
+    df["Market_Return"] = df["Close"].pct_change()
+    df["Strategy_Return"] = df["Market_Return"] * df["Position"]
+    df["Cum_Market_Return"] = (1 + df["Market_Return"]).cumprod()
+    df["Cum_Strategy_Return"] = (1 + df["Strategy_Return"]).cumprod()
+    
+    return df
 # -------------------------
 # News and Sentiment Functions
 
