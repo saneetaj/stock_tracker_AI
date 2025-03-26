@@ -86,7 +86,8 @@ def get_historical_stock_data(ticker: str, days: int = 50) -> Optional[pd.DataFr
         bars = historical_client.get_stock_bars(request_params)
 
         if bars:
-            bars_list = list(bars.values())[0]
+            #bars_list = list(bars.values())[0]
+            bars_list = bars[ticker]  # Access bars for the specific ticker
             df = pd.DataFrame([
                 {
                     'Date': bar.timestamp,
