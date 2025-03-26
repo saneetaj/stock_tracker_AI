@@ -237,6 +237,7 @@ def get_stock_news(ticker: str) -> str:
     else:
         return f"⚠️ No news available for {ticker}."
 
+@st.experimental_memo(ttl=3600) 
 def get_market_sentiment(tickers: List[str]) -> dict:
     sentiments = {}
     rate_limit_error_flag = False
@@ -277,7 +278,11 @@ async def main():
     st.title("📈 Intraday Ticker AI")
     tickers_input = st.text_input("Enter stock ticker symbol(s), separated by commas", "AAPL, MSFT", key="tickers_input")
     tickers = [ticker.strip().upper() for ticker in tickers_input.split(",")]
-
+    
+    # Refresh the stock quotes every 5 minutes (300000 ms) without refreshing the cached news.
+    from streamlit_autorefresh import st_autorefresh
+    st_autorefresh(interval=300000, limit=0, key="intraday_autorefresh")
+    
     if st.button("🔍 Analyze"):
         sentiments = get_market_sentiment(tickers)
         for ticker in tickers:
