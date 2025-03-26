@@ -136,68 +136,37 @@ def calculate_indicators(data: pd.DataFrame) -> pd.DataFrame:
 # Buy Low, Sell High Signal Generation and Backtesting
 
 def generate_buy_low_sell_high_signals(data: pd.DataFrame) -> pd.DataFrame:
-    """
-    Generates buy and sell signals using a multi-indicator "buy low, sell high" approach.
-    
-    Oversold (Buy) conditions:
-      - RSI < 30
-      - Close < Bollinger Lower Band
-      - MACD < MACD_Signal
-      - CCI < -100
-      - ADX < 20  (non-trending market)
-      
-    Overbought (Sell) conditions:
-      - RSI > 70
-      - Close > Bollinger Upper Band
-      - MACD > MACD_Signal
-      - CCI > 100
-      - ADX < 20
-      
-    Additionally, a long-term trend filter is applied:
-      - For a Buy signal, the Close must be above the 200-day SMA.
-      - For a Sell signal, the Close must be below the 200-day SMA.
-    
-    A Buy signal is generated if at least 3 oversold conditions are met (and the price is above the 200-day SMA).
-    A Sell signal is generated if at least 3 overbought conditions are met (and the price is below the 200-day SMA).
-    """
     data = data.copy()
-    required_cols = ["RSI", "BB_Lower", "BB_Upper", "MACD", "MACD_Signal", "CCI", "ADX", "Close", "SMA_200"]
-    missing_cols = [col for col in required_cols if col not in data.columns]
-    if missing_cols:
-        st.error(f"Missing columns {missing_cols}. Please recalculate indicators first.")
-        return data
-
-    # Oversold conditions (for Buy signal)
-    data["cond_RSI_buy"] = data["RSI"] < 30
+    
+    # Adjust oversold thresholds
+    data["cond_RSI_buy"] = data["RSI"] < 40  # Instead of 30
     data["cond_BB_buy"]  = data["Close"] < data["BB_Lower"]
     data["cond_MACD_buy"] = data["MACD"] < data["MACD_Signal"]
     data["cond_CCI_buy"] = data["CCI"] < -100
-    data["cond_ADX_buy"] = data["ADX"] < 20
-
-    # Overbought conditions (for Sell signal)
+    
+    # Overbought thresholds remain the same
     data["cond_RSI_sell"] = data["RSI"] > 70
     data["cond_BB_sell"]  = data["Close"] > data["BB_Upper"]
     data["cond_MACD_sell"] = data["MACD"] > data["MACD_Signal"]
     data["cond_CCI_sell"] = data["CCI"] > 100
-    data["cond_ADX_sell"] = data["ADX"] < 20
-
-    data["buy_score"] = (data["cond_RSI_buy"].astype(int) +
-                         data["cond_BB_buy"].astype(int) +
-                         data["cond_MACD_buy"].astype(int) +
-                         data["cond_CCI_buy"].astype(int) +
-                         data["cond_ADX_buy"].astype(int))
     
-    data["sell_score"] = (data["cond_RSI_sell"].astype(int) +
-                          data["cond_BB_sell"].astype(int) +
-                          data["cond_MACD_sell"].astype(int) +
-                          data["cond_CCI_sell"].astype(int) +
-                          data["cond_ADX_sell"].astype(int))
+    # Remove ADX conditions to allow buying even in a trending market
+    data["buy_score"] = (
+        data["cond_RSI_buy"].astype(int) +
+        data["cond_BB_buy"].astype(int) +
+        data["cond_MACD_buy"].astype(int) +
+        data["cond_CCI_buy"].astype(int)
+    )
+    data["sell_score"] = (
+        data["cond_RSI_sell"].astype(int) +
+        data["cond_BB_sell"].astype(int) +
+        data["cond_MACD_sell"].astype(int) +
+        data["cond_CCI_sell"].astype(int)
+    )
     
-    # Apply the long-term trend filter:
-    # Buy only if the Close is above the 200-day SMA (indicating an overall uptrend).
-    # Sell only if the Close is below the 200-day SMA.
-    data["Buy_Signal"] = (data["buy_score"] >= 3) & (data["Close"] > data["SMA_200"])
-    data["Sell_Signal"] = (data["sell_score"] >= 3) & (data["Close"] < data["SMA_200"])
+    # Require only 2 conditions to trigger a buy or sell
+    data["Buy_Signal"] = data["buy_score"] >= 2
+    data["Sell_Signal"] = data["sell_score"] >= 2
     
     return data
 
