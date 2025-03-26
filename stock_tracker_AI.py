@@ -341,7 +341,7 @@ def get_market_sentiment(tickers):
 
 
 # Streamlit UI
-def main():
+async def main():
     """
     Main function to run the Streamlit application.
     """
@@ -351,7 +351,7 @@ def main():
     tickers = [ticker.strip().upper() for ticker in tickers_input.split(",")]
 
     if st.button("🔍 Analyze"):
-        sentiments = get_market_sentiment(tickers)
+        sentiments = get_market_sentiment(tickers)  # Assuming this is defined elsewhere
 
         for ticker in tickers:
             if ticker in sentiments:
@@ -361,8 +361,8 @@ def main():
             st.subheader(f"📊 Stock Data for {ticker}")
 
             # Fetch stock data
-            intraday_data = asyncio.run(get_intraday_data(ticker))
-            historical_data = get_historical_stock_data(ticker)
+            intraday_data = await get_intraday_data(ticker)  # Use await instead of asyncio.run
+            historical_data = get_historical_stock_data(ticker)  # Assuming this is defined elsewhere
 
             data_to_use = intraday_data if intraday_data is not None else historical_data
 
@@ -375,4 +375,4 @@ def main():
             st.success("✅ Stock data updates every 5 minutes!")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())  # Use asyncio.run to run the asynchronous main function
