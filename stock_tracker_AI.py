@@ -44,7 +44,7 @@ except openai.OpenAIError as e:
 try:
     historical_client = StockHistoricalDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
     live_stream = StockDataStream(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
-    st.write(f"live_stream after init: {live_stream}")  # ADDED DEBUG PRINT
+    #st.write(f"live_stream after init: {live_stream}")  # ADDED DEBUG PRINT
 except Exception as e:
     st.error(f"Error initializing Alpaca data client: {e}")
     logging.error(f"Error initializing Alpaca data client: {e}")
@@ -122,7 +122,7 @@ async def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
             return None
 
         try:
-            st.write(f"live_stream before subscribe: {live_stream}") # ADDED DEBUG PRINT
+            #st.write(f"live_stream before subscribe: {live_stream}") # ADDED DEBUG PRINT
             await live_stream.subscribe_bars(stock_data_handler, ticker)
             await asyncio.sleep(10)
             await live_stream.unsubscribe_bars(stock_data_handler, ticker)
