@@ -10,7 +10,8 @@ import subprocess
 import sys
 from typing import Optional, List
 from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.live import StockDataClient
+#from alpaca.data.live import StockDataClient
+from alpaca.data.live import StockDataStream
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from alpaca.data.news import NewsDataClient
@@ -41,7 +42,7 @@ except openai.OpenAIError as e:
 # Initialize Alpaca data client
 try:
     historical_client = StockHistoricalDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
-    live_client = StockDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
+    live_client = StockDataStream(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
     news_client = NewsDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
 except Exception as e:
     st.error(f"Error initializing Alpaca data client: {e}")
