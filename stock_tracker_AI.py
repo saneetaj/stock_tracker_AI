@@ -376,7 +376,7 @@ async def main():
     """
     st.title("📈 Ticker AI")
 
-    tickers_input = st.text_input("Enter stock ticker symbol(s), separated by commas", "AAPL, MSFT, GOOG")
+    tickers_input = st.text_input("Enter stock ticker symbol(s), separated by commas", "AAPL, MSFT, GOOG", key="tickers_input") # Added key
     tickers = [ticker.strip().upper() for ticker in tickers_input.split(",")]
 
     if st.button("🔍 Analyze"):
@@ -439,11 +439,6 @@ async def main():
             st.dataframe(processed_data.tail())
 
             st.success("✅ Stock data and chart updates every 5 minutes!")
-
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
 
 
 
