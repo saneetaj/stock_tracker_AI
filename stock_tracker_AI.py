@@ -44,14 +44,19 @@ except openai.OpenAIError as e:
 historical_client = None
 live_stream = None
 try:
-    historical_client = StockHistoricalDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
-    live_stream = StockDataStream(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
-    #st.write(f"live_stream after init: {live_stream}")  # ADDED DEBUG PRINT
+    historical_client = StockHistoricalDataClient(  # Removed feed here
+        api_key=alpaca_api_key,
+        secret_key=alpaca_secret_key,
+    )
+    live_stream = StockDataStream(
+        api_key=alpaca_api_key,
+        secret_key=alpaca_secret_key,
+    )
+    print(f"live_stream after init: {live_stream}")
 except Exception as e:
     st.error(f"Error initializing Alpaca data client: {e}")
     logging.error(f"Error initializing Alpaca data client: {e}")
-    st.stop() # ADDED: STOP IF INIT FAILS
-    live_stream = None # IMPORTANT.
+    # Don't stop here, allow historical data to be fetched if live stream fails.
 
 # Initialize Alpaca trade client (for trading actions)
 try:
@@ -84,11 +89,16 @@ def get_historical_stock_data(ticker: str, days: int = 50) -> Optional[pd.DataFr
             timeframe=TimeFrame.Day,
             feed="iex"
         )
+        if historical_client is not None:
+            bars = historical_client.get_stock_bars(request_params)
+        else:
+            return None
 
-        bars = historical_client.get_stock_bars(request_params)
+        print(f"bars type: {type(bars)}")  # Print type of bars
+        print(f"bars: {bars}")
 
         if bars:
-            #bars_list = list(bars.values())[0]
+            #  bars_list = list(bars.values())[0] # Removed .values()
             bars_list = bars[ticker]  # Access bars for the specific ticker
             df = pd.DataFrame([
                 {
@@ -120,12 +130,13 @@ async def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
             data_list.append(data)
 
         if live_stream is None:
-            st.error("⚠️ live_stream is not initialized.")
-            logging.error("live_stream is not initialized.")
+            st.error("⚠️ Live stream is not initialized. Intraday data is unavailable.")
+            logging.error("Live stream is not initialized. Intraday data is unavailable.")
             return None
 
         try:
-            #st.write(f"live_stream before subscribe: {live_stream}") # ADDED DEBUG PRINT
+            print(f"live_stream before subscribe: {live_stream}")
+            # await live_stream.subscribe_bars(stock_data_handler, ticker, data_feed='iex') # Removed data_feed
             await live_stream.subscribe_bars(stock_data_handler, ticker)
             await asyncio.sleep(10)
             await live_stream.unsubscribe_bars(stock_data_handler, ticker)
@@ -401,10 +412,12 @@ async def main():
             sell_signals = processed_data[processed_data['Sell_Signal_Combined'] == True]
 
             fig.add_trace(go.Scatter(x=buy_signals['Date'], y=buy_signals['Close'],
-                                     mode='markers', marker=dict(color='green', symbol='triangle-up', size=10),
+                                     mode='markers',
+                                     marker=dict(color='green', symbol='triangle-up', size=12),  # Increased size
                                      name='Buy Signals'))
             fig.add_trace(go.Scatter(x=sell_signals['Date'], y=sell_signals['Close'],
-                                     mode='markers', marker=dict(color='red', symbol='triangle-down', size=10),
+                                     mode='markers',
+                                     marker=dict(color='red', symbol='triangle-down', size=12),  # Increased size
                                      name='Sell Signals'))
 
             # Update layout for better visualization
@@ -422,6 +435,6 @@ async def main():
             st.success("✅ Stock data and chart updates every 5 minutes!")
 
 
-if __name__ == "__main__":
-    asyncio.run(main())  # Use asyncio.run to run the asynchronous main function
 
+if __name__ == "__main__":
+    asyncio.run(main())
