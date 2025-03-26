@@ -238,7 +238,7 @@ def get_stock_news(ticker: str) -> str:
     else:
         return f"⚠️ No news available for {ticker}."
 
-@st.experimental_memo(ttl=3600) 
+@st.cache_data(ttl=3600)  # Cache for 1 hour
 def get_market_sentiment(tickers: List[str]) -> dict:
     sentiments = {}
     rate_limit_error_flag = False
