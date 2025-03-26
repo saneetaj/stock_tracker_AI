@@ -77,7 +77,7 @@ except Exception as e:
 
 
 # Function to fetch historical stock data from Alpaca
-def get_historical_stock_data(ticker: str, days: int = 100) -> Optional[pd.DataFrame]:
+def get_historical_stock_data(ticker: str, days: int = 365) -> Optional[pd.DataFrame]:
     try:
         end_date = datetime.datetime.now()
         start_date = end_date - datetime.timedelta(days=days)
