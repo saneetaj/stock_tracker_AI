@@ -137,10 +137,13 @@ async def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
         try:
             print(f"live_stream before subscribe: {live_stream}")
             # await live_stream.subscribe_bars(stock_data_handler, ticker, data_feed='iex') # Removed data_feed
-            await live_stream.subscribe_bars(stock_data_handler, ticker)
-            await asyncio.sleep(10)
-            await live_stream.unsubscribe_bars(stock_data_handler, ticker)
-            await live_stream.close()
+            if live_stream is not None: # Check if live_stream is still valid
+                await live_stream.subscribe_bars(stock_data_handler, ticker)
+                await asyncio.sleep(10)
+                await live_stream.unsubscribe_bars(stock_data_handler, ticker)
+                await live_stream.close()
+            else:
+                return None
         except Exception as stream_error:
             st.error(f"⚠️ Error with live stream: {stream_error}")
             logging.error(f"⚠️ Error with live stream: {stream_error}")
