@@ -71,7 +71,6 @@ except Exception as e:
 
 
 # Function to fetch historical stock data from Alpaca
-# Function to fetch historical stock data from Alpaca
 def get_historical_stock_data(ticker: str, days: int = 50) -> Optional[pd.DataFrame]:
     try:
         end_date = datetime.datetime.now()
@@ -110,7 +109,6 @@ def get_historical_stock_data(ticker: str, days: int = 50) -> Optional[pd.DataFr
 
 
 
-# Function to get intraday stock data from Alpaca
 async def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
     try:
         data_list: List[dict] = []
@@ -118,10 +116,20 @@ async def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
         async def stock_data_handler(data: dict):
             data_list.append(data)
 
-        await live_stream.subscribe_bars(stock_data_handler, ticker)
-        await asyncio.sleep(10)
-        await live_stream.unsubscribe_bars(stock_data_handler, ticker)
-        await live_stream.close()
+        if live_stream is None:
+            st.error("⚠️ live_stream is not initialized.")
+            logging.error("live_stream is not initialized.")
+            return None
+
+        try:
+            await live_stream.subscribe_bars(stock_data_handler, ticker)
+            await asyncio.sleep(10)
+            await live_stream.unsubscribe_bars(stock_data_handler, ticker)
+            await live_stream.close()
+        except Exception as stream_error:
+            st.error(f"⚠️ Error with live stream: {stream_error}")
+            logging.error(f"⚠️ Error with live stream: {stream_error}")
+            return None
 
         if data_list:
             df = pd.DataFrame([
@@ -140,6 +148,7 @@ async def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
             st.error(f"⚠️ No intraday data found for {ticker}")
             logging.error(f"No intraday data found for {ticker}")
             return None
+
     except Exception as e:
         st.error(f"⚠️ Error fetching intraday data for {ticker}: {e}")
         logging.error(f"⚠️ Error fetching intraday data for {ticker}: {e}")
