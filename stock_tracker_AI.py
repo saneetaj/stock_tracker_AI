@@ -324,7 +324,7 @@ def combine_signals(data: pd.DataFrame) -> pd.DataFrame:
 
         # Generate combined buy/sell signals based on the scores
         data["Buy_Signal_Combined"] = data["Buy_Score"] >= 0.7  # Buy if the combined score is high
-        data["Sell_Signal_Combined"] = data["Sell_Score"] >= 0.4 # Sell if combined score is high
+        data["Sell_Signal_Combined"] = data["Sell_Score"] >= 0.45 # Sell if combined score is high
 
         return data
     except Exception as e:
