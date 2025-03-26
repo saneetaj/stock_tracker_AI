@@ -52,7 +52,7 @@ try:
         api_key=alpaca_api_key,
         secret_key=alpaca_secret_key,
     )
-    st.write(f"live_stream after init: {live_stream}")
+    #st.write(f"live_stream after init: {live_stream}")
 except Exception as e:
     st.error(f"Error initializing Alpaca data client: {e}")
     logging.error(f"Error initializing Alpaca data client: {e}")
@@ -94,8 +94,8 @@ def get_historical_stock_data(ticker: str, days: int = 100) -> Optional[pd.DataF
         else:
             return None
 
-        st.write(f"bars type: {type(bars)}")  # Print type of bars
-        st.write(f"bars: {bars}")
+        #st.write(f"bars type: {type(bars)}")  # Print type of bars
+        #st.write(f"bars: {bars}")
 
         if bars:
             #  bars_list = list(bars.values())[0] # Removed .values()
@@ -135,7 +135,7 @@ async def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
             return None
 
         try:
-            st.write(f"live_stream before subscribe: {live_stream}")
+            #st.write(f"live_stream before subscribe: {live_stream}")
             # await live_stream.subscribe_bars(stock_data_handler, ticker, data_feed='iex') # Removed data_feed
             if live_stream is not None: # Check if live_stream is still valid
                 await live_stream.subscribe_bars(stock_data_handler, ticker)
