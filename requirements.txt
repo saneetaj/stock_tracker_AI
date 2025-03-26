@@ -9,5 +9,5 @@ pandas
 openai
 requests
 rich
-alpaca
+alpaca-trade-api
 typing
