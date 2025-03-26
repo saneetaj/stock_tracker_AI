@@ -9,3 +9,5 @@ pandas
 openai
 requests
 rich
+alpaca
+typing
