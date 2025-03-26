@@ -41,6 +41,8 @@ except openai.OpenAIError as e:
     st.stop()
 
 # Initialize Alpaca data client
+historical_client = None
+live_stream = None
 try:
     historical_client = StockHistoricalDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
     live_stream = StockDataStream(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
