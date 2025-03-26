@@ -12,12 +12,16 @@ from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from alpaca.data.news import NewsDataClient
 from alpaca_trade_api.rest import REST
+from alpaca.trading.client import TradingClient
+from alpaca.trading.requests import GetAssetsRequest
 from typing import Optional, List
 
 # Load API keys from Streamlit secrets
 openai_api_key = st.secrets["openai_api_key"]
 alpaca_api_key = st.secrets["alpaca_api_key"]
 alpaca_secret_key = st.secrets["alpaca_secret_key"]
+
+trading_client = TradingClient('api-key', 'secret-key')
 
 # Initialize OpenAI client
 openai_client = openai.OpenAI(api_key=openai_api_key) # Changed to openai.OpenAI
