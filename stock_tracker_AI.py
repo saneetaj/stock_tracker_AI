@@ -405,7 +405,7 @@ def main():
             st.subheader(f"📊 Stock Data for {ticker}")
 
             # Fetch stock data
-            intraday_data = get_intraday_data(ticker)
+            intraday_data = await get_intraday_data(ticker)
             historical_data = get_historical_stock_data(ticker)
 
             # Determine which data to use (intraday if available, otherwise historical)
