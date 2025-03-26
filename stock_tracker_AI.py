@@ -145,7 +145,7 @@ async def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
             else:
                 return None
         except Exception as stream_error:
-            st.error(f"⚠️ Error with live stream: {stream_error}")
+            #st.error(f"⚠️ Error with live stream: {stream_error}")
             logging.error(f"⚠️ Error with live stream: {stream_error}")
             return None
 
