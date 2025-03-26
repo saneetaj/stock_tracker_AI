@@ -403,12 +403,11 @@ async def main():
             processed_data = generate_signals(processed_data)
             processed_data = combine_signals(processed_data)
 
-            # Create the candlestick chart
-            fig = go.Figure(data=[go.Candlestick(x=processed_data['Date'],
-                                               open=processed_data['Open'],
-                                               high=processed_data['High'],
-                                               low=processed_data['Low'],
-                                               close=processed_data['Close'])])
+            # Create the line chart
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=processed_data['Date'], y=processed_data['Close'],
+                                     mode='lines',
+                                     name='Close Price')) # Added name for close price
 
             # Add buy/sell signals to the chart
             buy_signals = processed_data[processed_data['Buy_Signal_Combined'] == True]
@@ -418,13 +417,13 @@ async def main():
             fig.add_trace(go.Scatter(x=buy_signals['Date'], y=buy_signals['Close'],
                                      mode='markers',
                                      marker=dict(color='green', symbol='triangle-up', size=12),
-                                     name='Buy Signals'))
+                                     name='Buy Signals')) # Added name
 
             #Plotting Sell Signals
             fig.add_trace(go.Scatter(x=sell_signals['Date'], y=sell_signals['Close'],
                                      mode='markers',
                                      marker=dict(color='red', symbol='triangle-down', size=12),
-                                     name='Sell Signals'))
+                                     name='Sell Signals')) # Added name
 
             # Update layout for better visualization
             fig.update_layout(title=f"{ticker} Stock Chart with Buy/Sell Signals",
