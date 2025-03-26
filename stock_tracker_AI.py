@@ -17,7 +17,6 @@ from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from alpaca_trade_api.rest import REST
 
-
 # Configure logging
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -44,7 +43,7 @@ except openai.OpenAIError as e:
 historical_client = None
 live_stream = None
 try:
-    historical_client = StockHistoricalDataClient(  # Removed feed here
+    historical_client = StockHistoricalDataClient(
         api_key=alpaca_api_key,
         secret_key=alpaca_secret_key,
     )
@@ -52,11 +51,10 @@ try:
         api_key=alpaca_api_key,
         secret_key=alpaca_secret_key,
     )
-    #st.write(f"live_stream after init: {live_stream}")
 except Exception as e:
     st.error(f"Error initializing Alpaca data client: {e}")
     logging.error(f"Error initializing Alpaca data client: {e}")
-    # Don't stop here, allow historical data to be fetched if live stream fails.
+    # Allow historical data to be fetched even if live stream fails.
 
 # Initialize Alpaca trade client (for trading actions)
 try:
@@ -66,17 +64,33 @@ except Exception as e:
     logging.error(f"Error initializing Alpaca trade client: {e}")
     st.stop()
 
-
 # Initialize Finnhub client
 try:
     finnhub_client = finnhub.Client(api_key=finnhub_api_key)
 except Exception as e:
-    st.error(f"Error initializing Finnhub trade client: {e}")
-    logging.error(f"Error initializing Finnhub trade client: {e}")
+    st.error(f"Error initializing Finnhub client: {e}")
+    logging.error(f"Error initializing Finnhub client: {e}")
     st.stop()
 
+# -------------------------
+# Utility Functions
 
-# Function to fetch historical stock data from Alpaca
+def compute_rsi(series: pd.Series, period: int = 14) -> pd.Series:
+    """
+    Compute the Relative Strength Index (RSI) using average gain and loss.
+    """
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.rolling(window=period, min_periods=period).mean()
+    avg_loss = loss.rolling(window=period, min_periods=period).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
+# -------------------------
+# Data Retrieval Functions
+
 def get_historical_stock_data(ticker: str, days: int = 365) -> Optional[pd.DataFrame]:
     try:
         end_date = datetime.datetime.now()
@@ -94,11 +108,7 @@ def get_historical_stock_data(ticker: str, days: int = 365) -> Optional[pd.DataF
         else:
             return None
 
-        #st.write(f"bars type: {type(bars)}")  # Print type of bars
-        #st.write(f"bars: {bars}")
-
         if bars:
-            #  bars_list = list(bars.values())[0] # Removed .values()
             bars_list = bars[ticker]  # Access bars for the specific ticker
             df = pd.DataFrame([
                 {
@@ -117,10 +127,8 @@ def get_historical_stock_data(ticker: str, days: int = 365) -> Optional[pd.DataF
             return None
     except Exception as e:
         st.error(f"⚠️ Error fetching historical data for {ticker}: {e}")
-        logging.error(f"⚠️ Error fetching historical data for {ticker}: {e}")
+        logging.error(f"Error fetching historical data for {ticker}: {e}")
         return None
-
-
 
 async def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
     try:
@@ -135,9 +143,7 @@ async def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
             return None
 
         try:
-            #st.write(f"live_stream before subscribe: {live_stream}")
-            # await live_stream.subscribe_bars(stock_data_handler, ticker, data_feed='iex') # Removed data_feed
-            if live_stream is not None: # Check if live_stream is still valid
+            if live_stream is not None:
                 await live_stream.subscribe_bars(stock_data_handler, ticker)
                 await asyncio.sleep(10)
                 await live_stream.unsubscribe_bars(stock_data_handler, ticker)
@@ -145,8 +151,7 @@ async def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
             else:
                 return None
         except Exception as stream_error:
-            #st.error(f"⚠️ Error with live stream: {stream_error}")
-            logging.error(f"⚠️ Error with live stream: {stream_error}")
+            logging.error(f"Error with live stream: {stream_error}")
             return None
 
         if data_list:
@@ -164,180 +169,145 @@ async def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
             return df
         else:
             st.error(f"⚠️ No intraday data found for {ticker}")
-            logging.error(f"No intraday data found for {ticker}")
+            logging.error("No intraday data found for {ticker}")
             return None
 
     except Exception as e:
         st.error(f"⚠️ Error fetching intraday data for {ticker}: {e}")
-        logging.error(f"⚠️ Error fetching intraday data for {ticker}: {e}")
+        logging.error(f"Error fetching intraday data for {ticker}: {e}")
         return None
 
+# -------------------------
+# Indicator and Signal Functions
 
-# Function to calculate technical indicators
 def calculate_indicators(data: pd.DataFrame) -> pd.DataFrame:
     """
-    Calculates technical indicators for the given stock data.
-
-    Args:
-        data (pd.DataFrame): A DataFrame containing stock data with 'Close' prices.
-
-    Returns:
-        pd.DataFrame: The DataFrame with added technical indicators.
+    Calculates various technical indicators:
+      - 50-day and 200-day SMAs
+      - RSI (14)
+      - MACD (12,26) and its signal line (9)
+      - Bollinger Bands (20-day)
+      - Stochastic Oscillator (14,3)
     """
     try:
+        data["Date"] = pd.to_datetime(data["Date"])
+        data.sort_values("Date", inplace=True)
+        # SMAs for trend
         data["SMA_50"] = data["Close"].rolling(window=50).mean()
-        data["RSI"] = 100 - (100 / (1 + data["Close"].pct_change().rolling(window=21).mean()))
-        # Exponential Moving Average (EMA)
-        # Shorter period EMA crossing above longer period EMA can be a Buy signal (bullish trend)
-        # EMA crossing below can be a Sell signal (bearish trend)
-        data["EMA_9"] = data["Close"].ewm(span=9, adjust=False).mean()
-        data["EMA_50"] = data["Close"].ewm(span=50, adjust=False).mean()
-
-        # MACD (12-26-9)
-        # MACD crossing below the signal line can be a Sell signal (bearish crossover)
-        data["EMA_12"] = data["Close"].ewm(span=12, adjust=False).mean()  # 12-day EMA
-        data["EMA_26"] = data["Close"].ewm(span=26, adjust=False).mean()  # 26-day EMA
+        data["SMA_200"] = data["Close"].rolling(window=200).mean()
+        # RSI
+        data["RSI"] = compute_rsi(data["Close"], period=14)
+        # MACD
+        data["EMA_12"] = data["Close"].ewm(span=12, adjust=False).mean()
+        data["EMA_26"] = data["Close"].ewm(span=26, adjust=False).mean()
         data["MACD"] = data["EMA_12"] - data["EMA_26"]
         data["MACD_Signal"] = data["MACD"].ewm(span=9, adjust=False).mean()
-
-        # Bollinger Bands (20-period)
-        # Price touching or going below the lower Bollinger Band suggests an oversold condition (Buy signal)
-        # Price touching or going above the upper Bollinger Band suggests an overbought condition (Sell signal)
-        data["Bollinger_Middle"] = data["Close"].rolling(window=20).mean()
-        data["Bollinger_Upper"] = data["Bollinger_Middle"] + 2 * data["Close"].rolling(window=20).std()
-        data["Bollinger_Lower"] = data["Bollinger_Middle"] - 2 * data["Close"].rolling(window=20).std()
-
+        # Bollinger Bands (20-day)
+        data["BB_Middle"] = data["Close"].rolling(window=20).mean()
+        data["BB_Std"] = data["Close"].rolling(window=20).std()
+        data["BB_Upper"] = data["BB_Middle"] + 2 * data["BB_Std"]
+        data["BB_Lower"] = data["BB_Middle"] - 2 * data["BB_Std"]
         # Stochastic Oscillator
-        # Stochastic K value below 20 suggests oversold (potential Buy signal)
-        # Stochastic K value above 80 suggests overbought (potential Sell signal)
-        high_14 = data["High"].rolling(window=14).max()
-        low_14 = data["Low"].rolling(window=14).min()
-        data["Stochastic_K"] = (data["Close"] - low_14) / (high_14 - low_14) * 100
+        data["Stoch_High"] = data["High"].rolling(window=14).max()
+        data["Stoch_Low"] = data["Low"].rolling(window=14).min()
+        data["Stochastic_K"] = 100 * ((data["Close"] - data["Stoch_Low"]) / (data["Stoch_High"] - data["Stoch_Low"]))
         data["Stochastic_D"] = data["Stochastic_K"].rolling(window=3).mean()
-
-        # ATR (Average True Range)
-        # ATR measures market volatility, but is not directly used in buy/sell signals in this case
-        # It's often used to adjust stop-loss levels based on the volatility of the stock
-        data["High-Low"] = data["High"] - data["Low"]
-        data["High-Prev Close"] = abs(data["High"] - data["Close"].shift(1))
-        data["Low-Prev Close"] = abs(data["Low"] - data["Close"].shift(1))
-        data["TR"] = data[["High-Low", "High-Prev Close", "Low-Prev Close"]].max(axis=1)
-        data["ATR"] = data["TR"].rolling(window=14).mean()
         return data
     except Exception as e:
         st.error(f"Error in calculate_indicators: {e}")
         logging.error(f"Error in calculate_indicators: {e}")
-        return pd.DataFrame()  # Return empty dataframe
+        return pd.DataFrame()
 
-
-# Function to generate buy/sell signals
-def generate_signals(data: pd.DataFrame) -> pd.DataFrame:
+def generate_combined_signals(data: pd.DataFrame) -> pd.DataFrame:
     """
-    Generates buy/sell signals based on technical indicators.
-
-    Args:
-        data (pd.DataFrame): A DataFrame containing stock data with technical indicators.
-
-    Returns:
-        pd.DataFrame: The DataFrame with added buy/sell signal columns.
-    """
-    try:
-        # Basic Buy/Sell Signals based on SMA and RSI
-        data["Buy_Signal"] = (
-            (data["Close"] > data["SMA_50"]) &  # Price above SMA
-            (data["RSI"] < 40) &  # RSI is not too high (less than 40 instead of 30)
-            (data["MACD"] > data["MACD_Signal"]) # MACD above signal
-        )
-        data["Sell_Signal"] = (
-            (data["Close"] < data["SMA_50"]) &  # Price below SMA
-            (data["RSI"] > 60) & # RSI is not too low (greater than 60 instead of 70)
-            (data["MACD"] < data["MACD_Signal"]) # MACD below signal
-        )
-
-        # Additional signals based on EMA, MACD, Bollinger Bands, and Stochastic Oscillator
-        data["Buy_Signal_EMA"] = data["EMA_9"] > data["EMA_50"]  # Buy if short-term EMA is above long-term EMA
-        data["Sell_Signal_EMA"] = data["EMA_9"] < data["EMA_50"]  # Sell if short-term EMA is below long-term EMA
-
-        data["Buy_Signal_MACD"] = data["MACD"] > data["MACD_Signal"]  # Buy if MACD is above the signal line
-        data["Sell_Signal_MACD"] = data["MACD"] < data["MACD_Signal"]  # Sell if MACD is below the signal line
-
-        data["Buy_Signal_BB"] = data["Close"] < data[
-            "Bollinger_Lower"
-        ]  # Buy if price is below the lower Bollinger Band
-        data["Sell_Signal_BB"] = data["Close"] > data[
-            "Bollinger_Upper"
-        ]  # Sell if price is above the upper Bollinger Band
-
-        data["Buy_Signal_Stochastic"] = (data["Stochastic_K"] < 20) & (
-            data["Stochastic_K"] > data["Stochastic_D"]
-        )  # Buy if Stochastic K is below 20 and above D
-        data["Sell_Signal_Stochastic"] = (data["Stochastic_K"] > 80) & (
-            data["Stochastic_K"] < data["Stochastic_D"]
-        )  # Sell if Stochastic K is above 80 and below D
-        return data
-    except Exception as e:
-        st.error(f"Error in generate_signals: {e}")
-        logging.error(f"Error in generate_signals: {e}")
-        return pd.DataFrame()  # return empty dataframe
-
-
-# Function to combine all buy/sell signals
-def combine_signals(data: pd.DataFrame) -> pd.DataFrame:
-    """
-    Combines all buy/sell signals into a single buy/sell decision.
-
-    Args:
-        data (pd.DataFrame): A DataFrame containing individual buy/sell signals.
-
-    Returns:
-        pd.DataFrame: The DataFrame with combined buy/sell signal columns.
+    Combines multiple indicator signals into one buy/sell decision.
+    
+    For a BUY signal, we require:
+      - Trend confirmation: SMA_50 > SMA_200 and RSI > 50.
+      - Momentum confirmation: MACD above its signal line.
+      - Optionally, oversold conditions: Price near or below the lower Bollinger Band or a low Stochastic_K.
+      
+    Each component is given a weight and the combined score must exceed a threshold.
     """
     try:
-        # Initialize combined signals to False
-        data["Buy_Signal_Combined"] = False
-        data["Sell_Signal_Combined"] = False
-
-        # Define weights for each signal
+        data = data.copy()
+        # Initialize scores
+        data["Buy_Score"] = 0
+        data["Sell_Score"] = 0
+        
+        # Define weights for each indicator
         weights = {
-            "SMA_RSI": 0.5,  # Increased weight
-            "EMA": 0.1,
-            "MACD": 0.3, # Increased weight
-            "BB": 0.05, # decreased weight
-            "Stochastic": 0.05, # decreased weight
+            "trend": 0.5,      # SMA & RSI conditions
+            "macd": 0.3,       # MACD condition
+            "bollinger": 0.1,  # Bollinger condition
+            "stochastic": 0.1  # Stochastic condition
         }
-
-        # Calculate a combined score for buy and sell signals
-        data["Buy_Score"] = (
-            (data["Buy_Signal"] & (data["RSI"] < 30)).astype(int) * weights["SMA_RSI"] + # Combining SMA and RSI for Buy
-            data["Buy_Signal_EMA"].astype(int) * weights["EMA"] +
-            data["Buy_Signal_MACD"].astype(int) * weights["MACD"] +
-            data["Buy_Signal_BB"].astype(int) * weights["BB"] +
-            data["Buy_Signal_Stochastic"].astype(int) * weights["Stochastic"]
-        )
-        data["Sell_Score"] = (
-            (data["Sell_Signal"] & (data["RSI"] > 70)).astype(int) * weights["SMA_RSI"] + # Combining SMA and RSI for Sell
-            data["Sell_Signal_EMA"].astype(int) * weights["EMA"] +
-            data["Sell_Signal_MACD"].astype(int) * weights["MACD"] +
-            data["Sell_Signal_BB"].astype(int) * weights["BB"] +
-            data["Sell_Signal_Stochastic"].astype(int) * weights["Stochastic"]
-        )
-
-        # Generate combined buy/sell signals based on the scores
-        data["Buy_Signal_Combined"] = data["Buy_Score"] >= 0.7  # Buy if the combined score is high
-        data["Sell_Signal_Combined"] = data["Sell_Score"] >= 0.45 # Sell if combined score is high
-
+        
+        # Trend: Buy if SMA_50 > SMA_200 and RSI > 50; Sell if opposite.
+        trend_buy = ((data["SMA_50"] > data["SMA_200"]) & (data["RSI"] > 50)).astype(int)
+        trend_sell = ((data["SMA_50"] < data["SMA_200"]) & (data["RSI"] < 50)).astype(int)
+        
+        # MACD: Buy if MACD > MACD_Signal; Sell if MACD < MACD_Signal.
+        macd_buy = (data["MACD"] > data["MACD_Signal"]).astype(int)
+        macd_sell = (data["MACD"] < data["MACD_Signal"]).astype(int)
+        
+        # Bollinger: Consider buy if Close is near or below the lower band (oversold); sell if above upper band.
+        bb_buy = (data["Close"] < data["BB_Lower"]).astype(int)
+        bb_sell = (data["Close"] > data["BB_Upper"]).astype(int)
+        
+        # Stochastic: Buy if Stochastic_K < 20 and K > D (oversold condition); Sell if Stochastic_K > 80 and K < D.
+        stoch_buy = ((data["Stochastic_K"] < 20) & (data["Stochastic_K"] > data["Stochastic_D"])).astype(int)
+        stoch_sell = ((data["Stochastic_K"] > 80) & (data["Stochastic_K"] < data["Stochastic_D"])).astype(int)
+        
+        # Calculate weighted scores
+        data["Buy_Score"] = (trend_buy * weights["trend"] +
+                             macd_buy * weights["macd"] +
+                             bb_buy * weights["bollinger"] +
+                             stoch_buy * weights["stochastic"])
+        data["Sell_Score"] = (trend_sell * weights["trend"] +
+                              macd_sell * weights["macd"] +
+                              bb_sell * weights["bollinger"] +
+                              stoch_sell * weights["stochastic"])
+        
+        # Set thresholds for signals; you can adjust these thresholds as needed.
+        data["Buy_Signal_Combined"] = data["Buy_Score"] >= 0.7
+        data["Sell_Signal_Combined"] = data["Sell_Score"] >= 0.5
+        
         return data
     except Exception as e:
-        st.error(f"Error in combine_signals: {e}")
-        logging.error(f"Error in combine_signals: {e}")
-        return pd.DataFrame()  # return empty dataframe
+        st.error(f"Error in generate_combined_signals: {e}")
+        logging.error(f"Error in generate_combined_signals: {e}")
+        return pd.DataFrame()
 
-# Function to fetch stock news from Finnhub
+def backtest_combined_strategy(data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Backtests the combined indicator strategy.
+    - Trades are simulated at the next day's open using a shifted signal.
+    - Cumulative returns for the strategy and a buy & hold baseline are calculated.
+    """
+    try:
+        df = data.copy().set_index("Date")
+        # Generate combined signals on the data
+        df = generate_combined_signals(df.reset_index()).set_index("Date")
+        # Create positions (1 for long, 0 for flat) by shifting the combined buy signal.
+        df["Position"] = df["Buy_Signal_Combined"].shift(1).fillna(0)
+        df["Market_Return"] = df["Close"].pct_change()
+        df["Strategy_Return"] = df["Market_Return"] * df["Position"]
+        df["Cum_Market_Return"] = (1 + df["Market_Return"]).cumprod()
+        df["Cum_Strategy_Return"] = (1 + df["Strategy_Return"]).cumprod()
+        return df
+    except Exception as e:
+        st.error(f"Error in backtest_combined_strategy: {e}")
+        logging.error(f"Error in backtest_combined_strategy: {e}")
+        return pd.DataFrame()
+
+# -------------------------
+# News and Sentiment Functions
+
 def get_stock_news(ticker):
     url = f"https://finnhub.io/api/v1/company-news?symbol={ticker}&from=2025-03-01&to=2025-03-24&token={finnhub_api_key}"
     response = requests.get(url)
     data = response.json()
-
     if response.status_code == 200 and data:
         news_articles = []
         for article in data[:3]:  # Limit to top 3 articles
@@ -348,19 +318,15 @@ def get_stock_news(ticker):
     else:
         return f"⚠️ No news available for {ticker}."
 
-# Function to fetch market sentiment using OpenAI
 def get_market_sentiment(tickers):
     sentiments = {}
     rate_limit_error_flag = False
-
     for ticker in tickers:
         news_data = get_stock_news(ticker)
         attempt = 1
-
         while attempt <= 5:
             try:
-                prompt = f"Analyze the market sentiment for {ticker} in the below news. :\n{news_data}\nProvide a brief summary (bullish, bearish, or neutral) with key reasons. Strictly limit the summary to 250 words max."
-
+                prompt = f"Analyze the market sentiment for {ticker} in the below news:\n{news_data}\nProvide a brief summary (bullish, bearish, or neutral) with key reasons. Limit the summary to 250 words max."
                 response = openai_client.chat.completions.create(
                     model="gpt-3.5-turbo",
                     messages=[
@@ -371,7 +337,6 @@ def get_market_sentiment(tickers):
                 )
                 sentiments[ticker] = response.choices[0].message.content.strip()
                 break
-
             except openai.OpenAIError as e:
                 if not rate_limit_error_flag:
                     sentiments['error'] = "⚠️ Rate limit reached. Try again later."
@@ -383,83 +348,77 @@ def get_market_sentiment(tickers):
                 else:
                     sentiments[ticker] = "⚠️ Rate limit reached. Try again later."
                     break
-
         time.sleep(2)
-
     return sentiments
 
-
+# -------------------------
 # Streamlit UI
-async def main():
-    """
-    Main function to run the Streamlit application.
-    """
-    st.title("📈 Ticker AI")
 
-    tickers_input = st.text_input("Enter stock ticker symbol(s), separated by commas", "AAPL, MSFT, GOOG", key="tickers_input") # Added key
+async def main():
+    st.title("📈 Ticker AI")
+    tickers_input = st.text_input("Enter stock ticker symbol(s), separated by commas", "AAPL, MSFT, GOOG", key="tickers_input")
     tickers = [ticker.strip().upper() for ticker in tickers_input.split(",")]
 
     if st.button("🔍 Analyze"):
         sentiments = get_market_sentiment(tickers)
-
         for ticker in tickers:
             if ticker in sentiments:
                 st.sidebar.subheader(f"📢 Sentiment for {ticker}")
                 st.sidebar.write(sentiments[ticker])
-
             st.subheader(f"📊 Stock Data for {ticker}")
-
-            # Fetch stock data
+            # Get data (prefer intraday if available; otherwise, use historical)
             intraday_data = await get_intraday_data(ticker)
             historical_data = get_historical_stock_data(ticker)
-
             data_to_use = intraday_data if intraday_data is not None else historical_data
-
             if data_to_use is None:
                 st.write(f"⚠️ No data available for {ticker}")
                 continue
 
+            # Calculate indicators and generate combined signals
             processed_data = calculate_indicators(data_to_use)
-            processed_data = generate_signals(processed_data)
-            processed_data = combine_signals(processed_data)
+            processed_data = generate_combined_signals(processed_data)
 
-            # Create the line chart
+            # Plot the stock chart with combined signals
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=processed_data['Date'], y=processed_data['Close'],
-                                     mode='lines',
-                                     name='Close Price',showlegend=True)) # Added name for close price
-
-            # Add buy/sell signals to the chart
-            buy_signals = processed_data[processed_data['Buy_Signal_Combined'] == True]
-            sell_signals = processed_data[processed_data['Sell_Signal_Combined'] == True]
-
-            #Plotting Buy Signals
+                                     mode='lines', name='Close Price', showlegend=True))
+            # Mark buy signals where combined signal is True
+            buy_signals = processed_data[processed_data["Buy_Signal_Combined"] == True]
+            # Mark sell signals where combined sell signal is True (if implemented)
+            sell_signals = processed_data[processed_data["Sell_Signal_Combined"] == True]
             fig.add_trace(go.Scatter(x=buy_signals['Date'], y=buy_signals['Close'],
-                                     mode='markers',
-                                     marker=dict(color='green', symbol='triangle-up', size=12),
-                                     name='Buy Signals',showlegend=True)) # Added name
-
-            #Plotting Sell Signals
+                                     mode='markers', marker=dict(color='green', symbol='triangle-up', size=12),
+                                     name='Buy Signal', showlegend=True))
             fig.add_trace(go.Scatter(x=sell_signals['Date'], y=sell_signals['Close'],
-                                     mode='markers',
-                                     marker=dict(color='red', symbol='triangle-down', size=12),
-                                     name='Sell Signals',showlegend=True)) # Added name
-
-            # Update layout for better visualization
-            fig.update_layout(title=f"{ticker} Stock Chart with Buy/Sell Signals",
+                                     mode='markers', marker=dict(color='red', symbol='triangle-down', size=12),
+                                     name='Sell Signal', showlegend=True))
+            fig.update_layout(title=f"{ticker} Stock Chart with Combined Signals",
                               xaxis_title="Date",
                               yaxis_title="Price",
                               legend_title="Signals")
-
-            # Display the chart
             st.plotly_chart(fig, use_container_width=True)
-
-            # Display the most recent data
             st.dataframe(processed_data.tail())
-
             st.success("✅ Stock data and chart updates every 5 minutes!")
-
-
+            
+            # -------------------------
+            # Backtesting the Combined Strategy on Historical Data
+            st.subheader(f"📈 Backtest: Combined Indicator Strategy for {ticker}")
+            backtest_data = calculate_indicators(historical_data)
+            backtest_data = generate_combined_signals(backtest_data)
+            bt_results = backtest_combined_strategy(backtest_data)
+            if not bt_results.empty:
+                bt_fig = go.Figure()
+                bt_fig.add_trace(go.Scatter(x=bt_results.index, y=bt_results['Cum_Market_Return'],
+                                            mode='lines', name='Buy & Hold', showlegend=True))
+                bt_fig.add_trace(go.Scatter(x=bt_results.index, y=bt_results['Cum_Strategy_Return'],
+                                            mode='lines', name='Combined Strategy', showlegend=True))
+                bt_fig.update_layout(title=f"Cumulative Returns: {ticker}",
+                                     xaxis_title="Date",
+                                     yaxis_title="Cumulative Return",
+                                     legend_title="Strategy")
+                st.plotly_chart(bt_fig, use_container_width=True)
+            else:
+                st.write("⚠️ Backtest data not available.")
 
 if __name__ == "__main__":
     asyncio.run(main())
