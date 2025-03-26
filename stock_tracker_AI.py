@@ -11,23 +11,24 @@ from alpaca.data.live import StockDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from alpaca.data.news import NewsDataClient
-from typing import Optional, List
 from alpaca_trade_api.rest import REST
+from typing import Optional, List
 
 # Load API keys from Streamlit secrets
 openai_api_key = st.secrets["openai_api_key"]
 alpaca_api_key = st.secrets["alpaca_api_key"]
 alpaca_secret_key = st.secrets["alpaca_secret_key"]
 
-#Alpaca Endpoint: https://api.alpaca.markets
-
 # Initialize OpenAI client
-client = openai.OpenAI(api_key=openai_api_key)
+openai_client = openai.OpenAI(api_key=openai_api_key) # Changed to openai.OpenAI
 
 # Initialize Alpaca data client
 historical_client = StockHistoricalDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
 live_client = StockDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
 news_client = NewsDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
+
+# Initialize Alpaca trade client (for trading actions)
+trade_client = REST(key_id=alpaca_api_key, secret_key=alpaca_secret_key)
 
 
 # Function to fetch historical stock data from Alpaca
