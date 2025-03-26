@@ -11,3 +11,4 @@ requests
 rich
 alpaca-trade-api
 typing
+alpaca-py
