@@ -13,3 +13,4 @@ alpaca-trade-api
 typing
 alpaca-py
 asyncio
+streamlit_autorefresh
