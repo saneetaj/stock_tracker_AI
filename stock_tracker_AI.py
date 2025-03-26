@@ -235,7 +235,7 @@ def calculate_indicators(data: pd.DataFrame) -> pd.DataFrame:
     except Exception as e:
         st.error(f"Error in calculate_indicators: {e}")
         logging.error(f"Error in calculate_indicators: {e}")
-        return pd.DataFrame() # Return empty dataframe
+        return pd.DataFrame()  # Return empty dataframe
 
 
 # Function to generate buy/sell signals
