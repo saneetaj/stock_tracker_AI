@@ -44,7 +44,7 @@ except openai.OpenAIError as e:
 # Initialize Alpaca data client
 try:
     historical_client = StockHistoricalDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
-    live_client = StockDataStream(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
+    live_stream = StockDataStream(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
     #news_client = NewsDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
 except Exception as e:
     st.error(f"Error initializing Alpaca data client: {e}")
@@ -128,9 +128,9 @@ def get_historical_stock_data(ticker: str, days: int = 50) -> Optional[pd.DataFr
 
 
 # Function to get intraday stock data from Alpaca
-def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
+async def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
     """
-    Fetches intraday stock data from Alpaca.
+    Fetches intraday stock data from Alpaca using StockDataStream.
 
     Args:
         ticker (str): The stock ticker symbol (e.g., 'AAPL').
@@ -140,34 +140,33 @@ def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
                             or None if an error occurs.
     """
     try:
-        # Calculate the start and end dates.  Alpaca uses bars for intraday.
-        end_date = datetime.datetime.now()
-        start_date = end_date - datetime.timedelta(days=1)
+        data_list: List[StockData] = []
+        # Define a callback function to process incoming stock data
+        async def stock_data_handler(data: StockData):
+            data_list.append(data)
 
-        # Create the request object
-        request_params = StockBarsRequest(
-            symbol_or_symbols=[ticker],
-            start=start_date,
-            end=end_date,
-            timeframe=TimeFrame.Hour,  # 60-minute interval
-        )
+        # Subscribe to stock data for the given ticker
+        await live_stream.subscribe_bars(stock_data_handler, ticker)
 
-        # Get the bars
-        bars = live_client.get_stock_bars(request_params)
+        # Run the stream for a short period to collect some data.  Adjust the time as needed.
+        await asyncio.sleep(10)  # Collect data for 10 seconds
 
-        # Convert to DataFrame
-        if bars:
-            bars_list = list(bars.values())[0]
+        # Stop the stream to prevent it from running indefinitely
+        await live_stream.unsubscribe_bars(stock_data_handler, ticker)
+        await live_stream.close()
+
+        # Convert collected data to a DataFrame
+        if data_list:
             df = pd.DataFrame([
                 {
-                    'Date': bar.timestamp,
-                    'Open': bar.open,
-                    'High': bar.high,
-                    'Low': bar.low,
-                    'Close': bar.close,
-                    'Volume': bar.volume,
+                    'Date': item.timestamp,
+                    'Open': item.open,
+                    'High': item.high,
+                    'Low': item.low,
+                    'Close': item.close,
+                    'Volume': item.volume,
                 }
-                for bar in bars_list
+                for item in data_list
             ])
             return df.sort_values(by='Date')
         else:
@@ -181,7 +180,6 @@ def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
         st.error(error_message)
         logging.error(error_message)
         return None
-
 
 
 # Function to calculate technical indicators
