@@ -42,8 +42,8 @@ except openai.OpenAIError as e:
 
 # Initialize Alpaca data client
 try:
-    historical_client = StockHistoricalDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
-    live_stream = StockDataStream(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
+    historical_client = StockHistoricalDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key, feed="iex")
+    live_stream = StockDataStream(api_key=alpaca_api_key, secret_key=alpaca_secret_key, data_feed="iex")
     print(f"live_stream after init: {live_stream}")  # ADDED DEBUG PRINT
 except Exception as e:
     st.error(f"Error initializing Alpaca data client: {e}")
@@ -80,6 +80,7 @@ def get_historical_stock_data(ticker: str, days: int = 50) -> Optional[pd.DataFr
             start=start_date,
             end=end_date,
             timeframe=TimeFrame.Day,
+            feed="iex"
         )
 
         bars = historical_client.get_stock_bars(request_params)
