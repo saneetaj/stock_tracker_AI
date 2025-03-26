@@ -106,7 +106,7 @@ def calculate_intraday_indicators(data: pd.DataFrame) -> pd.DataFrame:
         st.error("Data is missing the 'Date' column.")
         return pd.DataFrame()
     data["Date"] = pd.to_datetime(data["Date"])
-    # Assume data is in UTC; convert to US/Eastern
+    # Assume raw data is in UTC; convert to US/Eastern
     if data["Date"].dt.tz is None:
         data["Date"] = data["Date"].dt.tz_localize("UTC").dt.tz_convert("US/Eastern")
     else:
@@ -147,6 +147,7 @@ def backtest_intraday_strategy(data: pd.DataFrame) -> pd.DataFrame:
     df["Signal"] = 0
     df.loc[df["Buy_Signal"], "Signal"] = 1
     df.loc[df["Sell_Signal"], "Signal"] = 0
+    # Forward-fill the position and shift by 1 to simulate entering at next bar
     df["Position"] = df["Signal"].replace(to_replace=0, method='ffill').shift(1).fillna(0)
     df["Market_Return"] = df["Close"].pct_change()
     df["Strategy_Return"] = df["Market_Return"] * df["Position"]
@@ -165,7 +166,7 @@ def get_intraday_stock_data(ticker: str, days: int = 1) -> Optional[pd.DataFrame
             symbol_or_symbols=[ticker],
             start=start_date,
             end=end_date,
-            timeframe=TimeFrame.Minute,
+            timeframe=TimeFrame.Minute,  # 1-minute bars
             feed="iex"
         )
         if historical_client is not None:
@@ -187,7 +188,7 @@ def get_intraday_stock_data(ticker: str, days: int = 1) -> Optional[pd.DataFrame
                 df["Date"] = df["Date"].dt.tz_localize("UTC").dt.tz_convert("US/Eastern")
             else:
                 df["Date"] = df["Date"].dt.tz_convert("US/Eastern")
-            # Filter to market hours (9:30 to 16:00 ET)
+            # Filter to regular market hours: 9:30 to 16:00 ET
             start_time = datetime.time(9, 30)
             end_time = datetime.time(16, 0)
             df = df[(df["Date"].dt.time >= start_time) & (df["Date"].dt.time <= end_time)]
@@ -267,23 +268,23 @@ def build_lstm_model(input_shape: tuple) -> tf.keras.Model:
 
 def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 20, future_steps: int = 5) -> pd.DataFrame:
     """
-    Trains a simple LSTM model on historical daily closing prices and forecasts future_steps.
-    Returns a DataFrame with the forecasted dates and predicted prices.
+    Trains a simple LSTM model on historical daily closing prices and forecasts future_steps days.
+    Returns a DataFrame with forecasted dates and predicted closing prices.
     """
     df = data.copy()
     df.sort_values("Date", inplace=True)
     df.set_index("Date", inplace=True)
-    close_prices = df["Close"].values.reshape(-1,1)
+    close_prices = df["Close"].values.reshape(-1, 1)
 
-    # Scale data to [0,1]
+    # Scale the data to [0,1]
     scaler = MinMaxScaler(feature_range=(0, 1))
     scaled_data = scaler.fit_transform(close_prices)
 
-    # Prepare training data
+    # Prepare training sequences
     X, y = prepare_data(scaled_data, window_size)
     X = X.reshape((X.shape[0], X.shape[1], 1))
 
-    # Build and train model (use a small number of epochs for demonstration)
+    # Build and train LSTM model
     model = build_lstm_model((X.shape[1], 1))
     model.fit(X, y, epochs=10, batch_size=16, verbose=0)
 
@@ -293,20 +294,19 @@ def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 20, future_st
     current_input = last_window.reshape(1, window_size, 1)
     for _ in range(future_steps):
         pred = model.predict(current_input, verbose=0)
-        predictions.append(pred[0,0])
-        # Append prediction and slide window
-        current_input = np.append(current_input[:, 1:, :], np.array([[pred]]).reshape(1, 1, 1), axis=1)
+        predictions.append(pred[0, 0])
+        # Fix: Reshape prediction to (1, 1, 1) and append it along the time axis.
+        current_input = np.append(current_input[:, 1:, :], np.array(pred).reshape(1, 1, 1), axis=1)
 
     # Inverse transform predictions
     predictions = scaler.inverse_transform(np.array(predictions).reshape(-1, 1)).flatten()
 
-    # Prepare forecast dates: next trading days (assume one day per step)
+    # Generate forecast dates (skipping weekends)
     last_date = df.index[-1]
     forecast_dates = []
     current_date = last_date
     while len(forecast_dates) < future_steps:
         current_date += datetime.timedelta(days=1)
-        # Skip weekends
         if current_date.weekday() < 5:
             forecast_dates.append(current_date)
     forecast_df = pd.DataFrame({
@@ -378,7 +378,7 @@ async def main():
     # Auto-refresh stock quotes every 5 minutes
     st_autorefresh(interval=300000, limit=0, key="intraday_autorefresh")
     
-    # Run analysis if tickers are provided (no button required)
+    # Run analysis automatically if tickers are provided
     if tickers:
         sentiments = get_market_sentiment(tickers)
         for ticker in tickers:
@@ -391,9 +391,9 @@ async def main():
                 st.write(f"⚠️ No intraday data available for {ticker}")
                 continue
 
-            # Process intraday data
             processed_data = calculate_intraday_indicators(intraday_data)
             processed_data = generate_intraday_signals(processed_data)
+
             fig = go.Figure()
             fig.add_trace(go.Scatter(
                 x=processed_data['Date'],
@@ -457,16 +457,12 @@ async def main():
             else:
                 st.write("⚠️ No backtest data available.")
 
-            # -------------------------
-            # Neural Network Forecasting
             st.subheader(f"🔮 Neural Network Forecast for {ticker}")
             historical_data = get_historical_stock_data(ticker, days=365)
             if historical_data is None or historical_data.empty:
                 st.write(f"⚠️ No historical data available for {ticker} for forecasting.")
             else:
-                # For forecasting, we use daily historical data
                 forecast_df = predict_stock_with_lstm(historical_data, window_size=20, future_steps=5)
-                # Plot historical daily close plus forecast
                 hist_df = historical_data.copy()
                 hist_df.sort_values("Date", inplace=True)
                 fig_nn = go.Figure()
@@ -490,7 +486,7 @@ async def main():
                 )
                 st.plotly_chart(fig_nn, use_container_width=True)
 
-# Neural Network Forecasting Function
+# Neural Network Forecasting Function with Fix
 def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 20, future_steps: int = 5) -> pd.DataFrame:
     """
     Trains a simple LSTM model on historical daily closing prices and forecasts future_steps days.
@@ -513,14 +509,15 @@ def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 20, future_st
     model = build_lstm_model((X.shape[1], 1))
     model.fit(X, y, epochs=10, batch_size=16, verbose=0)
 
-    # Forecast future_steps using the last window of data
+    # Forecast future steps using the last window of data
     last_window = scaled_data[-window_size:]
     predictions = []
     current_input = last_window.reshape(1, window_size, 1)
     for _ in range(future_steps):
         pred = model.predict(current_input, verbose=0)
-        predictions.append(pred[0,0])
-        current_input = np.append(current_input[:,1:,:], [[pred]], axis=1)
+        predictions.append(pred[0, 0])
+        # Fix: reshape pred to (1, 1, 1) before appending
+        current_input = np.append(current_input[:, 1:, :], np.array(pred).reshape(1, 1, 1), axis=1)
 
     predictions = scaler.inverse_transform(np.array(predictions).reshape(-1, 1)).flatten()
 
@@ -532,7 +529,10 @@ def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 20, future_st
         current_date += datetime.timedelta(days=1)
         if current_date.weekday() < 5:
             forecast_dates.append(current_date)
-    forecast_df = pd.DataFrame({"Date": forecast_dates, "Predicted_Close": predictions})
+    forecast_df = pd.DataFrame({
+        "Date": forecast_dates,
+        "Predicted_Close": predictions
+    })
     forecast_df["Date"] = pd.to_datetime(forecast_df["Date"]).dt.tz_localize("US/Eastern")
     return forecast_df
 
