@@ -186,7 +186,7 @@ def calculate_indicators(data: pd.DataFrame) -> pd.DataFrame:
     """
     try:
         data["SMA_50"] = data["Close"].rolling(window=50).mean()
-        data["RSI"] = 100 - (100 / (1 + data["Close"].pct_change().rolling(window=14).mean()))
+        data["RSI"] = 100 - (100 / (1 + data["Close"].pct_change().rolling(window=21).mean()))
         # Exponential Moving Average (EMA)
         # Shorter period EMA crossing above longer period EMA can be a Buy signal (bullish trend)
         # EMA crossing below can be a Sell signal (bearish trend)
