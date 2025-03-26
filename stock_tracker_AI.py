@@ -8,13 +8,14 @@ import requests
 import logging
 import subprocess
 import sys
+import finnhub
 from typing import Optional, List
 from alpaca.data.historical import StockHistoricalDataClient
 #from alpaca.data.live import StockDataClient
 from alpaca.data.live import StockDataStream
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
-from alpaca.data.news import NewsDataClient
+#from alpaca.data.news import NewsDataClient
 from alpaca_trade_api.rest import REST
 
 
@@ -26,6 +27,7 @@ try:
     openai_api_key = st.secrets["openai_api_key"]
     alpaca_api_key = st.secrets["alpaca_api_key"]
     alpaca_secret_key = st.secrets["alpaca_secret_key"]
+    finnhub_api_key = st.secrets["finnhub_api_key"]
 except KeyError as e:
     st.error(f"Missing API key in Streamlit secrets: {e}")
     logging.error(f"Missing API key in Streamlit secrets: {e}")
@@ -43,7 +45,7 @@ except openai.OpenAIError as e:
 try:
     historical_client = StockHistoricalDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
     live_client = StockDataStream(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
-    news_client = NewsDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
+    #news_client = NewsDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
 except Exception as e:
     st.error(f"Error initializing Alpaca data client: {e}")
     logging.error(f"Error initializing Alpaca data client: {e}")
@@ -55,6 +57,15 @@ try:
 except Exception as e:
     st.error(f"Error initializing Alpaca trade client: {e}")
     logging.error(f"Error initializing Alpaca trade client: {e}")
+    st.stop()
+
+
+# Initialize Finnhub client
+try:
+    finnhub_client = finnhub.Client(api_key=finnhub_api_key)
+except Exception as e:
+    st.error(f"Error initializing Finnhub trade client: {e}")
+    logging.error(f"Error initializing Finnhub trade client: {e}")
     st.stop()
 
 
@@ -312,47 +323,24 @@ def combine_signals(data: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame() # Return empty dataframe
 
 
-def get_stock_news(ticker: str) -> str:
-    """
-    Fetches stock news from Alpaca.
+# Function to fetch stock news from Finnhub
+def get_stock_news(ticker):
+    url = f"https://finnhub.io/api/v1/company-news?symbol={ticker}&from=2025-03-01&to=2025-03-24&token={finnhub_api_key}"
+    response = requests.get(url)
+    data = response.json()
 
-    Args:
-        ticker (str): The ticker symbol for the company.
-
-    Returns:
-        str: A formatted string containing news headlines and URLs, or a message
-            indicating no news is available, or an error message.
-    """
-    try:
-        news = news_client.get_news(symbol=ticker, limit=3)  # Limit to top 3 articles
-        if news:
-            news_articles = []
-            for article in news:
-                title = article.headline
-                url = article.url
-                news_articles.append(f"• {title}: {url}")
-            return "\n".join(news_articles)
-        else:
-            return f"⚠️ No news available for {ticker} from Alpaca."
-    except Exception as e:
-        error_message = f"⚠️ Error fetching news for {ticker} from Alpaca: {e}"
-        st.error(error_message)
-        logging.error(error_message)
-        return ""  # Return empty string to avoid crashing the app
-
+    if response.status_code == 200 and data:
+        news_articles = []
+        for article in data[:3]:  # Limit to top 3 articles
+            title = article['headline']
+            url = article['url']
+            news_articles.append(f"• {title}: {url}")
+        return "\n".join(news_articles)
+    else:
+        return f"⚠️ No news available for {ticker}."
 
 # Function to fetch market sentiment using OpenAI
-def get_market_sentiment(tickers: List[str]) -> dict:
-    """
-    Fetches market sentiment for a list of tickers using OpenAI's GPT-4.
-
-    Args:
-        tickers (List[str]): A list of stock ticker symbols.
-
-    Returns:
-        dict: A dictionary where keys are tickers and values are sentiment summaries,
-              or an error message if the OpenAI API request fails.
-    """
+def get_market_sentiment(tickers):
     sentiments = {}
     rate_limit_error_flag = False
 
@@ -364,40 +352,32 @@ def get_market_sentiment(tickers: List[str]) -> dict:
             try:
                 prompt = f"Analyze the market sentiment for {ticker} in the below news. :\n{news_data}\nProvide a brief summary (bullish, bearish, or neutral) with key reasons. Strictly limit the summary to 250 words max."
 
-                response = openai_client.chat.completions.create(
+                response = client.chat.completions.create(
                     model="gpt-4",
                     messages=[
                         {"role": "system", "content": "You are a financial news analyst."},
-                        {"role": "user", "content": prompt},
+                        {"role": "user", "content": prompt}
                     ],
-                    max_tokens=400,
+                    max_tokens=400
                 )
                 sentiments[ticker] = response.choices[0].message.content.strip()
-                break  # Exit the retry loop if successful
+                break
 
             except openai.OpenAIError as e:
                 if not rate_limit_error_flag:
                     sentiments['error'] = "⚠️ Rate limit reached. Try again later."
                     rate_limit_error_flag = True
-                logging.error(f"OpenAI error for {ticker}: {e}")  # Log the error
                 if attempt < 5:
                     wait_time = 2 ** attempt
                     time.sleep(wait_time)
                     attempt += 1
                 else:
                     sentiments[ticker] = "⚠️ Rate limit reached. Try again later."
-                    break  # Exit the retry loop after max attempts
-            except Exception as e:
-                error_message = f"An unexpected error occurred while fetching sentiment for {ticker}: {e}"
-                st.error(error_message)
-                logging.error(error_message)
-                sentiments[ticker] = error_message
-                break
+                    break
 
-        time.sleep(2)  # Add a delay to stay within API rate limits
+        time.sleep(2)
 
     return sentiments
-
 
 
 # Streamlit UI
