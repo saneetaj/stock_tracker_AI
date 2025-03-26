@@ -6,34 +6,50 @@ import time
 import plotly.graph_objects as go
 import requests
 import logging
-import subprocess  # Import subprocess
-import sys # Import sys
+import subprocess
+import sys
 from typing import Optional, List
+
+# Configure logging
+logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Try to import the Alpaca modules, and install if they are not present
 def install_alpaca_dependencies():
+    """
+    Installs the Alpaca SDK if it's not already installed.  Returns True if Alpaca
+    SDK is already installed, False otherwise.  Displays messages in Streamlit
+    indicating installation status.
+    """
     try:
         from alpaca.data.historical import StockHistoricalDataClient
         from alpaca.data.live import StockDataClient
         from alpaca.data.news import NewsDataClient
         from alpaca_trade_api.rest import REST
-        return True # Returns True if already installed
+        return True  # Returns True if already installed
     except ImportError:
         st.warning("Alpaca SDK not found. Installing...")
         try:
             # Use subprocess to install the Alpaca SDK
             subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'alpaca-py'])
             st.success("Alpaca SDK installed successfully. Please rerun the app.")
-            return False # Returns False if it just installed
+            return False  # Returns False if it just installed
         except subprocess.CalledProcessError as e:
-            st.error(f"Error installing Alpaca SDK: {e}")
+            error_message = f"Error installing Alpaca SDK: {e}"
+            st.error(error_message)
+            logging.error(error_message)  # Log the error
             return False
+        except Exception as e:
+            error_message = f"An unexpected error occurred during installation: {e}"
+            st.error(error_message)
+            logging.error(error_message)
+            return False
+
 
 # Install Alpaca dependencies and check if already installed
 if not install_alpaca_dependencies():
-    st.stop()  # Stop the app if installation is needed or fails.
+    st.rerun()  # Rerun the app after installation
 
-from alpaca.data.historical import StockHistoricalDataClient # Import after installation
+from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.live import StockDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
@@ -41,20 +57,40 @@ from alpaca.data.news import NewsDataClient
 from alpaca_trade_api.rest import REST
 
 # Load API keys from Streamlit secrets
-openai_api_key = st.secrets["openai_api_key"]
-alpaca_api_key = st.secrets["alpaca_api_key"]
-alpaca_secret_key = st.secrets["alpaca_secret_key"]
+try:
+    openai_api_key = st.secrets["openai_api_key"]
+    alpaca_api_key = st.secrets["alpaca_api_key"]
+    alpaca_secret_key = st.secrets["alpaca_secret_key"]
+except KeyError as e:
+    st.error(f"Missing API key in Streamlit secrets: {e}")
+    logging.error(f"Missing API key in Streamlit secrets: {e}")
+    st.stop()
 
 # Initialize OpenAI client
-openai_client = openai.OpenAI(api_key=openai_api_key)
+try:
+    openai_client = openai.OpenAI(api_key=openai_api_key)
+except openai.OpenAIError as e:
+    st.error(f"Error initializing OpenAI client: {e}")
+    logging.error(f"Error initializing OpenAI client: {e}")
+    st.stop()
 
 # Initialize Alpaca data client
-historical_client = StockHistoricalDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
-live_client = StockDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
-news_client = NewsDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
+try:
+    historical_client = StockHistoricalDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
+    live_client = StockDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
+    news_client = NewsDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
+except Exception as e:
+    st.error(f"Error initializing Alpaca data client: {e}")
+    logging.error(f"Error initializing Alpaca data client: {e}")
+    st.stop()
 
 # Initialize Alpaca trade client (for trading actions)
-trade_client = REST(key_id=alpaca_api_key, secret_key=alpaca_secret_key)
+try:
+    trade_client = REST(key_id=alpaca_api_key, secret_key=alpaca_secret_key)
+except Exception as e:
+    st.error(f"Error initializing Alpaca trade client: {e}")
+    logging.error(f"Error initializing Alpaca trade client: {e}")
+    st.stop()
 
 
 # Function to fetch historical stock data from Alpaca
@@ -68,7 +104,7 @@ def get_historical_stock_data(ticker: str, days: int = 50) -> Optional[pd.DataFr
 
     Returns:
         Optional[pd.DataFrame]: A DataFrame containing the historical stock data,
-                          or None if an error occurs.
+                            or None if an error occurs.
     """
     try:
         # Calculate the start date
@@ -102,11 +138,15 @@ def get_historical_stock_data(ticker: str, days: int = 50) -> Optional[pd.DataFr
             ])
             return df
         else:
-            st.error(f"⚠️ Error: No historical data found for {ticker} from Alpaca.")
+            error_message = f"⚠️ Error: No historical data found for {ticker} from Alpaca."
+            st.error(error_message)
+            logging.error(error_message)
             return None
 
     except Exception as e:
-        st.error(f"⚠️ Error fetching historical data for {ticker}: {e}")
+        error_message = f"⚠️ Error fetching historical data for {ticker}: {e}"
+        st.error(error_message)
+        logging.error(error_message)
         return None
 
 
@@ -121,7 +161,7 @@ def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
 
     Returns:
         Optional[pd.DataFrame]: A DataFrame containing the intraday stock data,
-                          or None if an error occurs.
+                            or None if an error occurs.
     """
     try:
         # Calculate the start and end dates.  Alpaca uses bars for intraday.
@@ -155,11 +195,15 @@ def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
             ])
             return df.sort_values(by='Date')
         else:
-            st.error(f"⚠️ Error: No intraday data found for {ticker} from Alpaca.")
+            error_message = f"⚠️ Error: No intraday data found for {ticker} from Alpaca."
+            st.error(error_message)
+            logging.error(error_message)
             return None
 
     except Exception as e:
-        st.error(f"⚠️ Error fetching intraday data for {ticker}: {e}")
+        error_message = f"⚠️ Error fetching intraday data for {ticker}: {e}"
+        st.error(error_message)
+        logging.error(error_message)
         return None
 
 
@@ -175,46 +219,49 @@ def calculate_indicators(data: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: The DataFrame with added technical indicators.
     """
-    data["SMA_20"] = data["Close"].rolling(window=20).mean()
-    data["RSI"] = 100 - (100 / (1 + data["Close"].pct_change().rolling(window=14).mean()))
-    # Exponential Moving Average (EMA)
-    # Shorter period EMA crossing above longer period EMA can be a Buy signal (bullish trend)
-    # EMA crossing below can be a Sell signal (bearish trend)
-    data["EMA_9"] = data["Close"].ewm(span=9, adjust=False).mean()
-    data["EMA_50"] = data["Close"].ewm(span=50, adjust=False).mean()
+    try:
+        data["SMA_20"] = data["Close"].rolling(window=20).mean()
+        data["RSI"] = 100 - (100 / (1 + data["Close"].pct_change().rolling(window=14).mean()))
+        # Exponential Moving Average (EMA)
+        # Shorter period EMA crossing above longer period EMA can be a Buy signal (bullish trend)
+        # EMA crossing below can be a Sell signal (bearish trend)
+        data["EMA_9"] = data["Close"].ewm(span=9, adjust=False).mean()
+        data["EMA_50"] = data["Close"].ewm(span=50, adjust=False).mean()
 
-    # MACD (12-26-9)
-    # MACD crossing above the signal line can be a Buy signal (bullish crossover)
-    # MACD crossing below the signal line can be a Sell signal (bearish crossover)
-    data["MACD"] = data["EMA_9"] - data["EMA_50"]
-    data["MACD_Signal"] = data["MACD"].ewm(span=9, adjust=False).mean()
+        # MACD (12-26-9)
+        # MACD crossing above the signal line can be a Buy signal (bullish crossover)
+        # MACD crossing below the signal line can be a Sell signal (bearish crossover)
+        data["MACD"] = data["EMA_9"] - data["EMA_50"]
+        data["MACD_Signal"] = data["MACD"].ewm(span=9, adjust=False).mean()
 
-    # Bollinger Bands (20-period)
-    # Price touching or going below the lower Bollinger Band suggests an oversold condition (Buy signal)
-    # Price touching or going above the upper Bollinger Band suggests an overbought condition (Sell signal)
-    data["Bollinger_Middle"] = data["Close"].rolling(window=20).mean()
-    data["Bollinger_Upper"] = data["Bollinger_Middle"] + 2 * data["Close"].rolling(window=20).std()
-    data["Bollinger_Lower"] = data["Bollinger_Middle"] - 2 * data["Close"].rolling(window=20).std()
+        # Bollinger Bands (20-period)
+        # Price touching or going below the lower Bollinger Band suggests an oversold condition (Buy signal)
+        # Price touching or going above the upper Bollinger Band suggests an overbought condition (Sell signal)
+        data["Bollinger_Middle"] = data["Close"].rolling(window=20).mean()
+        data["Bollinger_Upper"] = data["Bollinger_Middle"] + 2 * data["Close"].rolling(window=20).std()
+        data["Bollinger_Lower"] = data["Bollinger_Middle"] - 2 * data["Close"].rolling(window=20).std()
 
-    # Stochastic Oscillator
-    # Stochastic K value below 20 suggests oversold (potential Buy signal)
-    # Stochastic K value above 80 suggests overbought (potential Sell signal)
-    high_14 = data["High"].rolling(window=14).max()
-    low_14 = data["Low"].rolling(window=14).min()
-    data["Stochastic_K"] = (data["Close"] - low_14) / (high_14 - low_14) * 100
-    data["Stochastic_D"] = data["Stochastic_K"].rolling(window=3).mean()
+        # Stochastic Oscillator
+        # Stochastic K value below 20 suggests oversold (potential Buy signal)
+        # Stochastic K value above 80 suggests overbought (potential Sell signal)
+        high_14 = data["High"].rolling(window=14).max()
+        low_14 = data["Low"].rolling(window=14).min()
+        data["Stochastic_K"] = (data["Close"] - low_14) / (high_14 - low_14) * 100
+        data["Stochastic_D"] = data["Stochastic_K"].rolling(window=3).mean()
 
-    # ATR (Average True Range)
-    # ATR measures market volatility, but is not directly used in buy/sell signals in this case
-    # It's often used to adjust stop-loss levels based on the volatility of the stock
-    data["High-Low"] = data["High"] - data["Low"]
-    data["High-Prev Close"] = abs(data["High"] - data["Close"].shift(1))
-    data["Low-Prev Close"] = abs(data["Low"] - data["Close"].shift(1))
-    data["TR"] = data[["High-Low", "High-Prev Close", "Low-Prev Close"]].max(axis=1)
-    data["ATR"] = data["TR"].rolling(window=14).mean()
-
-    return data
-
+        # ATR (Average True Range)
+        # ATR measures market volatility, but is not directly used in buy/sell signals in this case
+        # It's often used to adjust stop-loss levels based on the volatility of the stock
+        data["High-Low"] = data["High"] - data["Low"]
+        data["High-Prev Close"] = abs(data["High"] - data["Close"].shift(1))
+        data["Low-Prev Close"] = abs(data["Low"] - data["Close"].shift(1))
+        data["TR"] = data[["High-Low", "High-Prev Close", "Low-Prev Close"]].max(axis=1)
+        data["ATR"] = data["TR"].rolling(window=14).mean()
+        return data
+    except Exception as e:
+        st.error(f"Error in calculate_indicators: {e}")
+        logging.error(f"Error in calculate_indicators: {e}")
+        return pd.DataFrame() # Return empty dataframe
 
 
 # Function to generate buy/sell signals
@@ -228,27 +275,40 @@ def generate_signals(data: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: The DataFrame with added buy/sell signal columns.
     """
-    # Basic Buy/Sell Signals based on SMA and RSI
-    data["Buy_Signal"] = (data["Close"] > data["SMA_20"]) & (data["RSI"] < 30)  # Buy if price above SMA and RSI is oversold
-    data["Sell_Signal"] = (data["Close"] < data["SMA_20"]) & (data["RSI"] > 70)  # Sell if price below SMA and RSI is overbought
+    try:
+        # Basic Buy/Sell Signals based on SMA and RSI
+        data["Buy_Signal"] = (data["Close"] > data["SMA_20"]) & (
+            data["RSI"] < 30
+        )  # Buy if price above SMA and RSI is oversold
+        data["Sell_Signal"] = (data["Close"] < data["SMA_20"]) & (
+            data["RSI"] > 70
+        )  # Sell if price below SMA and RSI is overbought
 
-    # Additional signals based on EMA, MACD, Bollinger Bands, and Stochastic Oscillator
-    data["Buy_Signal_EMA"] = data["EMA_9"] > data["EMA_50"]  # Buy if short-term EMA is above long-term EMA
-    data["Sell_Signal_EMA"] = data["EMA_9"] < data["EMA_50"]  # Sell if short-term EMA is below long-term EMA
+        # Additional signals based on EMA, MACD, Bollinger Bands, and Stochastic Oscillator
+        data["Buy_Signal_EMA"] = data["EMA_9"] > data["EMA_50"]  # Buy if short-term EMA is above long-term EMA
+        data["Sell_Signal_EMA"] = data["EMA_9"] < data["EMA_50"]  # Sell if short-term EMA is below long-term EMA
 
-    data["Buy_Signal_MACD"] = data["MACD"] > data["MACD_Signal"]  # Buy if MACD is above the signal line
-    data["Sell_Signal_MACD"] = data["MACD"] < data["MACD_Signal"]  # Sell if MACD is below the signal line
+        data["Buy_Signal_MACD"] = data["MACD"] > data["MACD_Signal"]  # Buy if MACD is above the signal line
+        data["Sell_Signal_MACD"] = data["MACD"] < data["MACD_Signal"]  # Sell if MACD is below the signal line
 
-    data["Buy_Signal_BB"] = data["Close"] < data["Bollinger_Lower"]  # Buy if price is below the lower Bollinger Band
-    data["Sell_Signal_BB"] = data["Close"] > data["Bollinger_Upper"]  # Sell if price is above the upper Bollinger Band
+        data["Buy_Signal_BB"] = data["Close"] < data[
+            "Bollinger_Lower"
+        ]  # Buy if price is below the lower Bollinger Band
+        data["Sell_Signal_BB"] = data["Close"] > data[
+            "Bollinger_Upper"
+        ]  # Sell if price is above the upper Bollinger Band
 
-    data["Buy_Signal_Stochastic"] = (data["Stochastic_K"] < 20) & (
-        data["Stochastic_K"] > data["Stochastic_D"])  # Buy if Stochastic K is below 20 and above D
-    data["Sell_Signal_Stochastic"] = (data["Stochastic_K"] > 80) & (
-        data["Stochastic_K"] < data["Stochastic_D"])  # Sell if Stochastic K is above 80 and below D
-
-    return data
-
+        data["Buy_Signal_Stochastic"] = (data["Stochastic_K"] < 20) & (
+            data["Stochastic_K"] > data["Stochastic_D"]
+        )  # Buy if Stochastic K is below 20 and above D
+        data["Sell_Signal_Stochastic"] = (data["Stochastic_K"] > 80) & (
+            data["Stochastic_K"] < data["Stochastic_D"]
+        )  # Sell if Stochastic K is above 80 and below D
+        return data
+    except Exception as e:
+        st.error(f"Error in generate_signals: {e}")
+        logging.error(f"Error in generate_signals: {e}")
+        return pd.DataFrame() # return empty dataframe
 
 
 # Function to combine all buy/sell signals
@@ -262,26 +322,29 @@ def combine_signals(data: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: The DataFrame with combined buy/sell signal columns.
     """
-    # Combining all the buy signals into one: All conditions must be true for a Buy
-    data["Buy_Signal_Combined"] = (
-        data["Buy_Signal"]
-        & data["Buy_Signal_EMA"]
-        & data["Buy_Signal_MACD"]
-        & data["Buy_Signal_BB"]
-        & data["Buy_Signal_Stochastic"]
-    )
+    try:
+        # Combining all the buy signals into one: All conditions must be true for a Buy
+        data["Buy_Signal_Combined"] = (
+            data["Buy_Signal"]
+            & data["Buy_Signal_EMA"]
+            & data["Buy_Signal_MACD"]
+            & data["Buy_Signal_BB"]
+            & data["Buy_Signal_Stochastic"]
+        )
 
-    # Combining all the sell signals into one: Any of the conditions being true will trigger a Sell
-    data["Sell_Signal_Combined"] = (
-        data["Sell_Signal"]
-        | data["Sell_Signal_EMA"]
-        | data["Sell_Signal_MACD"]
-        | data["Sell_Signal_BB"]
-        | data["Sell_Signal_Stochastic"]
-    )
-
-    return data
-
+        # Combining all the sell signals into one: Any of the conditions being true will trigger a Sell
+        data["Sell_Signal_Combined"] = (
+            data["Sell_Signal"]
+            | data["Sell_Signal_EMA"]
+            | data["Sell_Signal_MACD"]
+            | data["Sell_Signal_BB"]
+            | data["Sell_Signal_Stochastic"]
+        )
+        return data
+    except Exception as e:
+        st.error(f"Error in combine_signals: {e}")
+        logging.error(f"Error in combine_signals: {e}")
+        return pd.DataFrame() # Return empty dataframe
 
 
 def get_stock_news(ticker: str) -> str:
@@ -293,22 +356,24 @@ def get_stock_news(ticker: str) -> str:
 
     Returns:
         str: A formatted string containing news headlines and URLs, or a message
-             indicating no news is available.
+            indicating no news is available, or an error message.
     """
     try:
-        news = news_client.get_news(symbol=ticker)
+        news = news_client.get_news(symbol=ticker, limit=3)  # Limit to top 3 articles
         if news:
             news_articles = []
-            for article in news[:3]:  # Limit to top 3 articles
+            for article in news:
                 title = article.headline
                 url = article.url
                 news_articles.append(f"• {title}: {url}")
             return "\n".join(news_articles)
         else:
-            return f"⚠️ No news available for {ticker}."
+            return f"⚠️ No news available for {ticker} from Alpaca."
     except Exception as e:
-        return f"⚠️ Error fetching news for {ticker}: {e}"
-
+        error_message = f"⚠️ Error fetching news for {ticker} from Alpaca: {e}"
+        st.error(error_message)
+        logging.error(error_message)
+        return ""  # Return empty string to avoid crashing the app
 
 
 # Function to fetch market sentiment using OpenAI
@@ -334,13 +399,13 @@ def get_market_sentiment(tickers: List[str]) -> dict:
             try:
                 prompt = f"Analyze the market sentiment for {ticker} in the below news. :\n{news_data}\nProvide a brief summary (bullish, bearish, or neutral) with key reasons. Strictly limit the summary to 250 words max."
 
-                response = client.chat.completions.create(
+                response = openai_client.chat.completions.create(
                     model="gpt-4",
                     messages=[
                         {"role": "system", "content": "You are a financial news analyst."},
-                        {"role": "user", "content": prompt}
+                        {"role": "user", "content": prompt},
                     ],
-                    max_tokens=400
+                    max_tokens=400,
                 )
                 sentiments[ticker] = response.choices[0].message.content.strip()
                 break  # Exit the retry loop if successful
@@ -349,6 +414,7 @@ def get_market_sentiment(tickers: List[str]) -> dict:
                 if not rate_limit_error_flag:
                     sentiments['error'] = "⚠️ Rate limit reached. Try again later."
                     rate_limit_error_flag = True
+                logging.error(f"OpenAI error for {ticker}: {e}")  # Log the error
                 if attempt < 5:
                     wait_time = 2 ** attempt
                     time.sleep(wait_time)
@@ -356,6 +422,12 @@ def get_market_sentiment(tickers: List[str]) -> dict:
                 else:
                     sentiments[ticker] = "⚠️ Rate limit reached. Try again later."
                     break  # Exit the retry loop after max attempts
+            except Exception as e:
+                error_message = f"An unexpected error occurred while fetching sentiment for {ticker}: {e}"
+                st.error(error_message)
+                logging.error(error_message)
+                sentiments[ticker] = error_message
+                break
 
         time.sleep(2)  # Add a delay to stay within API rate limits
 
@@ -380,7 +452,7 @@ def main():
 
         # Display sentiment info in the sidebar only if it exists
         for ticker in tickers:
-            if ticker in sentiments and sentiments[ticker] != "⚠️ Rate limit reached. Try again later.":
+            if ticker in sentiments and "⚠️" not in sentiments[ticker]: # Check for the error message
                 st.sidebar.subheader(f"📢 Sentiment for {ticker}")
                 st.sidebar.write(sentiments[ticker])
             elif ticker in sentiments:
@@ -401,7 +473,7 @@ def main():
                 continue  # Move to the next ticker
 
             df = calculate_indicators(data_to_use)  # use the dataframe
-            if len(df) < 20:  # check dataframe length.
+            if df.empty or len(df) < 20:  # Check if DataFrame is empty or too short
                 st.write(f"⚠️ Not enough data points to calculate indicators for {ticker}")
                 continue
             df = generate_signals(df)  # Generate buy/sell signals
@@ -416,13 +488,13 @@ def main():
             buy_signals = df[df["Buy_Signal_Combined"]]
             sell_signals = df[df["Sell_Signal_Combined"]]
             fig.add_trace(go.Scatter(x=buy_signals['Date'], y=buy_signals["Close"], mode="markers",
-                                     name="Buy Signal", marker=dict(color="green", size=10)))
+                                    name="Buy Signal", marker=dict(color="green", size=10)))
             fig.add_trace(go.Scatter(x=sell_signals['Date'], y=sell_signals["Close"], mode="markers",
-                                     name="Sell Signal", marker=dict(color="red", size=10)))
+                                    name="Sell Signal", marker=dict(color="red", size=10)))
 
             st.plotly_chart(fig)
 
-        # Auto-refresh logic
+        # Auto-refresh logic - removed from the button
         st.success("✅ Stock data updates every 5 minutes!")
         time.sleep(300)  # Refresh every 5 minutes
 
