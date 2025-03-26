@@ -10,6 +10,7 @@ import logging
 import asyncio
 from typing import Optional, List
 import pytz
+from streamlit_autorefresh import st_autorefresh
 
 # Alpaca Imports
 from alpaca.data.historical import StockHistoricalDataClient
