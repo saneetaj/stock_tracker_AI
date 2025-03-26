@@ -1,4 +1,4 @@
-Understanding the ProblemThe error "object NoneType can't be used in 'await' expression" means that the live_stream variable is None when the code tries to use await with it (specifically, in the get_intraday_data function).  This indicates that the live_stream object was not successfully initialized.Debugging Steps Based on Your CodeHere's a refined debugging strategy, directly applied to your code, to pinpoint why live_stream might be None:Initialization Check:Add print statements immediately after the live_stream initialization within the try block. This will confirm if the initialization step is reached and if live_stream is assigned a value.Early Return on Initialization Failure:If the live_stream initialization fails, the program should exit to prevent further errors.Check for Global Scope Issues (Less Likely, But Possible):Ensure that live_stream is not being inadvertently reassigned to None elsewhere in your code.  (This is less likely in the provided code, but it's a general debugging principle.)Modified Code with DebuggingHere's your code with added print statements and an early return to help diagnose the issue:import streamlit as st
+import streamlit as st
 import openai
 import pandas as pd
 import datetime
@@ -44,7 +44,7 @@ except openai.OpenAIError as e:
 try:
     historical_client = StockHistoricalDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
     live_stream = StockDataStream(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
-    st.write(f"live_stream after init: {live_stream}")  # ADDED DEBUG PRINT
+    print(f"live_stream after init: {live_stream}")  # ADDED DEBUG PRINT
 except Exception as e:
     st.error(f"Error initializing Alpaca data client: {e}")
     logging.error(f"Error initializing Alpaca data client: {e}")
@@ -121,7 +121,7 @@ async def get_intraday_data(ticker: str) -> Optional[pd.DataFrame]:
             return None
 
         try:
-            st.write(f"live_stream before subscribe: {live_stream}") # ADDED DEBUG PRINT
+            print(f"live_stream before subscribe: {live_stream}") # ADDED DEBUG PRINT
             await live_stream.subscribe_bars(stock_data_handler, ticker)
             await asyncio.sleep(10)
             await live_stream.unsubscribe_bars(stock_data_handler, ticker)
@@ -395,3 +395,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())  # Use asyncio.run to run the asynchronous main function
+
