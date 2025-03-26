@@ -1,6 +1,7 @@
 import streamlit as st
 import openai
 import pandas as pd
+import numpy as np
 import datetime
 import time
 import plotly.graph_objects as go
@@ -69,7 +70,6 @@ except Exception as e:
     logging.error(f"Error initializing Finnhub client: {e}")
     st.stop()
 
-
 # -------------------------
 # Indicator Calculation Functions
 
@@ -113,11 +113,16 @@ def compute_adx(data: pd.DataFrame, period: int = 14) -> pd.Series:
 
 def compute_cci(data: pd.DataFrame, period: int = 20) -> pd.Series:
     """
-    Computes the Commodity Channel Index (CCI).
+    Computes the Commodity Channel Index (CCI) using a custom mean absolute deviation.
     """
     tp = (data["High"] + data["Low"] + data["Close"]) / 3.0
     sma_tp = tp.rolling(window=period, min_periods=period).mean()
-    mad = tp.rolling(window=period, min_periods=period).apply(lambda x: pd.Series(x).mad())
+    
+    # Custom mean absolute deviation function
+    def mad_func(x):
+        return np.mean(np.abs(x - np.mean(x)))
+    
+    mad = tp.rolling(window=period, min_periods=period).apply(mad_func, raw=True)
     cci = (tp - sma_tp) / (0.015 * mad)
     return cci
 
@@ -133,6 +138,10 @@ def calculate_indicators(data: pd.DataFrame) -> pd.DataFrame:
       - CCI (20)
     """
     try:
+        # Ensure the data has a Date column
+        if "Date" not in data.columns:
+            st.error("Data is missing the 'Date' column.")
+            return pd.DataFrame()
         data["Date"] = pd.to_datetime(data["Date"])
         data.sort_values("Date", inplace=True)
         # SMAs
@@ -393,7 +402,7 @@ async def main():
             intraday_data = await get_intraday_data(ticker)
             historical_data = get_historical_stock_data(ticker)
             data_to_use = intraday_data if intraday_data is not None else historical_data
-            if data_to_use is None:
+            if data_to_use is None or data_to_use.empty:
                 st.write(f"⚠️ No data available for {ticker}")
                 continue
             
