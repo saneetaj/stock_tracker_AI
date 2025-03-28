@@ -125,10 +125,10 @@ def calculate_intraday_indicators(data: pd.DataFrame) -> pd.DataFrame:
 
 def generate_intraday_signals(data: pd.DataFrame) -> pd.DataFrame:
     data = data.copy()
-    # Buy if oversold (RSI < 30 OR Close below lower Bollinger)
-    data["Buy_Signal"] = (data["RSI"] < 30) | (data["Close"] < data["BB_Lower"])
-    # Sell if overbought (RSI > 70 OR Close above upper Bollinger)
-    data["Sell_Signal"] = (data["RSI"] > 70) | (data["Close"] > data["BB_Upper"])
+    # Buy if oversold (RSI < 25 OR Close below lower Bollinger)
+    data["Buy_Signal"] = (data["RSI"] < 25) | (data["Close"] < data["BB_Lower"])
+    # Sell if overbought (RSI > 75 OR Close above upper Bollinger)
+    data["Sell_Signal"] = (data["RSI"] > 75) | (data["Close"] > data["BB_Upper"])
     return data
 
 # ------------------------------------
