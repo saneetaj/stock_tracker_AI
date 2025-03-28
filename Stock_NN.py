@@ -121,20 +121,29 @@ def calculate_intraday_indicators(data: pd.DataFrame) -> pd.DataFrame:
     return data
 
 # ------------------------------------
-# Intraday Signal Generation
+# Intraday Signal Generation with Weights
 
-def generate_intraday_signals(data: pd.DataFrame) -> pd.DataFrame:
+def generate_intraday_signals(data: pd.DataFrame, rsi_weight: float, bollinger_weight: float, buy_threshold: float, sell_threshold: float) -> pd.DataFrame:
     data = data.copy()
-    # Buy if oversold (RSI < 30 OR Close below lower Bollinger)
-    data["Buy_Signal"] = (data["RSI"] < 30) | (data["Close"] < data["BB_Lower"])
-    # Sell if overbought (RSI > 70 OR Close above upper Bollinger)
-    data["Sell_Signal"] = (data["RSI"] > 70) | (data["Close"] > data["BB_Upper"])
+    # Create binary signals for each indicator
+    rsi_buy = np.where(data["RSI"] < 30, 1, 0)
+    boll_buy = np.where(data["Close"] < data["BB_Lower"], 1, 0)
+    # Weighted buy score
+    buy_score = rsi_weight * rsi_buy + bollinger_weight * boll_buy
+
+    rsi_sell = np.where(data["RSI"] > 70, 1, 0)
+    boll_sell = np.where(data["Close"] > data["BB_Upper"], 1, 0)
+    # Weighted sell score
+    sell_score = rsi_weight * rsi_sell + bollinger_weight * boll_sell
+
+    data["Buy_Signal"] = buy_score >= buy_threshold
+    data["Sell_Signal"] = sell_score >= sell_threshold
     return data
 
 # ------------------------------------
 # Intraday Backtesting
 
-def backtest_intraday_strategy(data: pd.DataFrame) -> pd.DataFrame:
+def backtest_intraday_strategy(data: pd.DataFrame, rsi_weight: float, bollinger_weight: float, buy_threshold: float, sell_threshold: float) -> pd.DataFrame:
     df = data.copy()
     if "Date" not in df.columns:
         st.error("Data is missing the 'Date' column.")
@@ -142,7 +151,7 @@ def backtest_intraday_strategy(data: pd.DataFrame) -> pd.DataFrame:
     df = calculate_intraday_indicators(df)
     df.sort_values("Date", inplace=True)
     df = df.reset_index(drop=True)
-    df = generate_intraday_signals(df)
+    df = generate_intraday_signals(df, rsi_weight, bollinger_weight, buy_threshold, sell_threshold)
     df.set_index("Date", inplace=True)
     df["Signal"] = 0
     df.loc[df["Buy_Signal"], "Signal"] = 1
@@ -280,7 +289,7 @@ def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 20, future_st
     scaler = MinMaxScaler(feature_range=(0, 1))
     scaled_data = scaler.fit_transform(close_prices)
 
-    # Check that we have enough data for training
+    # Check that we have enough data
     if len(scaled_data) <= window_size:
         st.error("Not enough historical data to train the LSTM model.")
         return pd.DataFrame()
@@ -300,7 +309,7 @@ def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 20, future_st
     for _ in range(future_steps):
         pred = model.predict(current_input, verbose=0)
         predictions.append(pred[0, 0])
-        # Fix: Reshape prediction to (1, 1, 1) and append it along the time axis.
+        # Fix: Reshape prediction to (1, 1, 1) and append along axis=1
         current_input = np.append(current_input[:, 1:, :], np.array(pred).reshape(1, 1, 1), axis=1)
 
     predictions = scaler.inverse_transform(np.array(predictions).reshape(-1, 1)).flatten()
@@ -380,6 +389,13 @@ async def main():
     tickers_input = st.text_input("Enter stock ticker symbol(s), separated by commas", "AAPL", key="tickers_input")
     tickers = [ticker.strip().upper() for ticker in tickers_input.split(",") if ticker.strip()]
 
+    # Sidebar sliders for adjusting indicator weights and thresholds
+    st.sidebar.header("Adjust Indicator Weights & Thresholds")
+    rsi_weight = st.sidebar.slider("RSI Weight", 0.0, 1.0, 0.5, step=0.1)
+    bollinger_weight = st.sidebar.slider("Bollinger Weight", 0.0, 1.0, 0.5, step=0.1)
+    buy_threshold = st.sidebar.slider("Buy Threshold", 0.0, 2.0, 1.0, step=0.1)
+    sell_threshold = st.sidebar.slider("Sell Threshold", 0.0, 2.0, 1.0, step=0.1)
+    
     # Auto-refresh stock quotes every 5 minutes
     st_autorefresh(interval=300000, limit=0, key="intraday_autorefresh")
     
@@ -397,7 +413,8 @@ async def main():
                 continue
 
             processed_data = calculate_intraday_indicators(intraday_data)
-            processed_data = generate_intraday_signals(processed_data)
+            # Use the weighted signal generator with slider values
+            processed_data = generate_intraday_signals(processed_data, rsi_weight, bollinger_weight, buy_threshold, sell_threshold)
 
             fig = go.Figure()
             fig.add_trace(go.Scatter(
@@ -423,7 +440,7 @@ async def main():
                 name='Sell Signal'
             ))
             fig.update_layout(
-                title=f"{ticker} Intraday Chart (1-minute) with Buy/Sell Signals (US/Eastern)",
+                title=f"{ticker} Intraday Chart (1-minute) with Weighted Buy/Sell Signals (US/Eastern)",
                 xaxis_title="Time (US/Eastern)",
                 yaxis_title="Price",
                 legend_title="Signals"
@@ -431,7 +448,7 @@ async def main():
             st.plotly_chart(fig, use_container_width=True)
 
             st.subheader(f"📈 Strategy Backtest for {ticker}")
-            bt_results = backtest_intraday_strategy(intraday_data)
+            bt_results = backtest_intraday_strategy(intraday_data, rsi_weight, bollinger_weight, buy_threshold, sell_threshold)
             if not bt_results.empty:
                 bt_fig = go.Figure()
                 bt_fig.add_trace(go.Scatter(
