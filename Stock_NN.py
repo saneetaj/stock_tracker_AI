@@ -27,6 +27,10 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, LSTM
 from sklearn.preprocessing import MinMaxScaler
 
+# Patch the event loop to allow nested async calls (needed for Streamlit)
+import nest_asyncio
+nest_asyncio.apply()
+
 # Configure logging
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -395,7 +399,7 @@ async def main():
     bollinger_weight = st.sidebar.slider("Bollinger Weight", 0.0, 1.0, 0.5, step=0.1)
     buy_threshold = st.sidebar.slider("Buy Threshold", 0.0, 2.0, 1.0, step=0.1)
     sell_threshold = st.sidebar.slider("Sell Threshold", 0.0, 2.0, 1.0, step=0.1)
-    
+
     # Auto-refresh stock quotes every 5 minutes
     st_autorefresh(interval=300000, limit=0, key="intraday_autorefresh")
     
