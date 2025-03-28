@@ -108,7 +108,7 @@ def calculate_intraday_indicators(data: pd.DataFrame) -> pd.DataFrame:
     data["Date"] = pd.to_datetime(data["Date"])
     # Assume raw data is in UTC; convert to US/Eastern
     if data["Date"].dt.tz is None:
-        data["Date"] = data["Date"].dt.tz_convert("UTC").dt.tz_convert("US/Eastern")
+        data["Date"] = data["Date"].dt.tz_localize("UTC").dt.tz_convert("US/Eastern")
     else:
         data["Date"] = data["Date"].dt.tz_convert("US/Eastern")
     data.sort_values("Date", inplace=True)
@@ -185,7 +185,7 @@ def get_intraday_stock_data(ticker: str, days: int = 1) -> Optional[pd.DataFrame
             } for bar in bars_list])
             df["Date"] = pd.to_datetime(df["Date"])
             if df["Date"].dt.tz is None:
-                df["Date"] = df["Date"].dt.tz_convert("UTC").dt.tz_convert("US/Eastern")
+                df["Date"] = df["Date"].dt.tz_localize("UTC").dt.tz_convert("US/Eastern")
             else:
                 df["Date"] = df["Date"].dt.tz_convert("US/Eastern")
             # Filter to regular market hours: 9:30 to 16:00 ET
@@ -234,7 +234,7 @@ def get_historical_stock_data(ticker: str, days: int = 365) -> Optional[pd.DataF
             } for bar in bars_list])
             df["Date"] = pd.to_datetime(df["Date"])
             if df["Date"].dt.tz is None:
-                df["Date"] = df["Date"].dt.tz_convert("UTC").dt.tz_convert("US/Eastern")
+                df["Date"] = df["Date"].dt.tz_localize("UTC").dt.tz_convert("US/Eastern")
             else:
                 df["Date"] = df["Date"].dt.tz_convert("US/Eastern")
             df.sort_values("Date", inplace=True)
@@ -280,6 +280,11 @@ def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 20, future_st
     scaler = MinMaxScaler(feature_range=(0, 1))
     scaled_data = scaler.fit_transform(close_prices)
 
+    # Check that we have enough data for training
+    if len(scaled_data) <= window_size:
+        st.error("Not enough historical data to train the LSTM model.")
+        return pd.DataFrame()
+
     # Prepare training sequences
     X, y = prepare_data(scaled_data, window_size)
     X = X.reshape((X.shape[0], X.shape[1], 1))
@@ -298,7 +303,6 @@ def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 20, future_st
         # Fix: Reshape prediction to (1, 1, 1) and append it along the time axis.
         current_input = np.append(current_input[:, 1:, :], np.array(pred).reshape(1, 1, 1), axis=1)
 
-    # Inverse transform predictions
     predictions = scaler.inverse_transform(np.array(predictions).reshape(-1, 1)).flatten()
 
     # Generate forecast dates (skipping weekends)
@@ -313,6 +317,7 @@ def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 20, future_st
         "Date": forecast_dates,
         "Predicted_Close": predictions
     })
+    # Use tz_convert because dates are already tz-aware
     forecast_df["Date"] = pd.to_datetime(forecast_df["Date"]).dt.tz_convert("US/Eastern")
     return forecast_df
 
@@ -486,8 +491,8 @@ async def main():
                 )
                 st.plotly_chart(fig_nn, use_container_width=True)
 
-# Neural Network Forecasting Function with Fix
-def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 10, future_steps: int = 5) -> pd.DataFrame:
+# Neural Network Forecasting Function with Fix and Data Check
+def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 20, future_steps: int = 5) -> pd.DataFrame:
     """
     Trains a simple LSTM model on historical daily closing prices and forecasts future_steps days.
     Returns a DataFrame with forecasted dates and predicted closing prices.
@@ -500,6 +505,11 @@ def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 10, future_st
     # Scale the data to [0,1]
     scaler = MinMaxScaler(feature_range=(0, 1))
     scaled_data = scaler.fit_transform(close_prices)
+
+    # Check that we have enough data
+    if len(scaled_data) <= window_size:
+        st.error("Not enough historical data to train the LSTM model.")
+        return pd.DataFrame()
 
     # Prepare training sequences
     X, y = prepare_data(scaled_data, window_size)
@@ -516,7 +526,7 @@ def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 10, future_st
     for _ in range(future_steps):
         pred = model.predict(current_input, verbose=0)
         predictions.append(pred[0, 0])
-        # Fix: reshape pred to (1, 1, 1) before appending
+        # Fix: Reshape prediction to (1, 1, 1) and append along axis=1
         current_input = np.append(current_input[:, 1:, :], np.array(pred).reshape(1, 1, 1), axis=1)
 
     predictions = scaler.inverse_transform(np.array(predictions).reshape(-1, 1)).flatten()
@@ -533,6 +543,7 @@ def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 10, future_st
         "Date": forecast_dates,
         "Predicted_Close": predictions
     })
+    # Use tz_convert because dates are already tz-aware
     forecast_df["Date"] = pd.to_datetime(forecast_df["Date"]).dt.tz_convert("US/Eastern")
     return forecast_df
 
