@@ -116,6 +116,7 @@ def calculate_intraday_indicators(data: pd.DataFrame) -> pd.DataFrame:
 
 # ------------------------------------
 # Multi-Timeframe Trend Signal Generation
+'''
 def generate_intraday_signals_multitimeframe(data: pd.DataFrame,
                                              trend_threshold_up: float = 0.5,
                                              trend_threshold_down: float = 0.5) -> pd.DataFrame:
@@ -147,6 +148,46 @@ def generate_intraday_signals_multitimeframe(data: pd.DataFrame,
     # Generate signals only if a clear trend exists
     # For a buy signal: if in a downtrend and the price is near the lower Bollinger band
     # For a sell signal: if in an uptrend and the price is near the upper Bollinger band
+    data["Buy_Signal"] = downtrend & (data["Close"] <= data["BB_Lower"])
+    data["Sell_Signal"] = uptrend & (data["Close"] >= data["BB_Upper"])
+    return data
+'''
+def generate_intraday_signals_multitimeframe(data: pd.DataFrame,
+                                             trend_threshold_up: float = 0.1,
+                                             trend_threshold_down: float = 0.1,
+                                             required_fraction: float = 0.75) -> pd.DataFrame:
+    """
+    Analyzes the trend over multiple timeframes (in minutes) and generates signals.
+    
+    It calculates the percentage change over 15, 30, 60, and 120 minutes.
+    If at least 'required_fraction' (e.g. 75%) of these timeframes show a trend:
+      - For an uptrend (sell condition): the percentage change > trend_threshold_up.
+      - For a downtrend (buy condition): the percentage change < -trend_threshold_down.
+    Then, signals are generated only if the current price is at the extreme of the Bollinger Bands.
+    """
+    data = data.copy()
+    # Get the most recent price from the data.
+    current_price = data["Close"].iloc[-1]
+    timeframes = [15, 30, 60, 120]
+    trend_values = []
+    
+    # For each timeframe, calculate the percentage change
+    for tf in timeframes:
+        if len(data) >= tf:
+            price_tf_ago = data["Close"].iloc[-tf]
+            trend_pct = (current_price - price_tf_ago) / price_tf_ago * 100
+            trend_values.append(trend_pct)
+    
+    # Determine how many timeframes are needed (e.g., 75% of available timeframes)
+    num_required = int(np.ceil(len(trend_values) * required_fraction))
+    
+    # Check if most timeframes indicate an uptrend or downtrend
+    uptrend = np.sum(np.array(trend_values) > trend_threshold_up) >= num_required
+    downtrend = np.sum(np.array(trend_values) < -trend_threshold_down) >= num_required
+
+    # Generate signals only if a clear trend exists:
+    # For a buy: if in a downtrend and the current close is near or below the lower Bollinger band.
+    # For a sell: if in an uptrend and the current close is near or above the upper Bollinger band.
     data["Buy_Signal"] = downtrend & (data["Close"] <= data["BB_Lower"])
     data["Sell_Signal"] = uptrend & (data["Close"] >= data["BB_Upper"])
     return data
