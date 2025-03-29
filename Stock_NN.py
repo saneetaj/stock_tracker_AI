@@ -54,14 +54,8 @@ except openai.OpenAIError as e:
 historical_client = None
 live_stream = None
 try:
-    historical_client = StockHistoricalDataClient(
-        api_key=alpaca_api_key,
-        secret_key=alpaca_secret_key,
-    )
-    live_stream = StockDataStream(
-        api_key=alpaca_api_key,
-        secret_key=alpaca_secret_key,
-    )
+    historical_client = StockHistoricalDataClient(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
+    live_stream = StockDataStream(api_key=alpaca_api_key, secret_key=alpaca_secret_key)
 except Exception as e:
     st.error(f"Error initializing Alpaca data client: {e}")
     logging.error(f"Error initializing Alpaca data client: {e}")
@@ -121,19 +115,44 @@ def calculate_intraday_indicators(data: pd.DataFrame) -> pd.DataFrame:
     return data
 
 # ------------------------------------
-# Intraday Signal Generation
-
-def generate_intraday_signals(data: pd.DataFrame) -> pd.DataFrame:
+# Multi-Timeframe Trend Signal Generation
+def generate_intraday_signals_multitimeframe(data: pd.DataFrame,
+                                             trend_threshold_up: float = 0.5,
+                                             trend_threshold_down: float = 0.5) -> pd.DataFrame:
+    """
+    Generates signals based on the trend over multiple timeframes.
+    
+    It calculates the percentage change in price over the past 15, 30, 60, and 120 minutes.
+    - If all these timeframes show a positive trend (above trend_threshold_up),
+      the market is considered to be in an uptrend and a sell signal is generated
+      when the price is near a local high (e.g. at or above the upper Bollinger band).
+    - If all timeframes show a negative trend (below -trend_threshold_down),
+      the market is considered to be in a downtrend and a buy signal is generated
+      when the price is near a local low (e.g. at or below the lower Bollinger band).
+    """
     data = data.copy()
-    # Buy if oversold (RSI < 25 OR Close below lower Bollinger)
-    data["Buy_Signal"] = (data["RSI"] < 25) | (data["Close"] < data["BB_Lower"])
-    # Sell if overbought (RSI > 75 OR Close above upper Bollinger)
-    data["Sell_Signal"] = (data["RSI"] > 75) | (data["Close"] > data["BB_Upper"])
+    # Calculate current price from the most recent data point
+    current_price = data["Close"].iloc[-1]
+    timeframes = [15, 30, 60, 120]  # timeframes in minutes (assume 1 bar = 1 minute)
+    trends = []
+    for tf in timeframes:
+        if len(data) >= tf:
+            price_tf_ago = data["Close"].iloc[-tf]
+            trend_pct = (current_price - price_tf_ago) / price_tf_ago * 100
+            trends.append(trend_pct)
+    # Determine if the trend is consistently up or down
+    uptrend = len(trends) > 0 and all(t >= trend_threshold_up for t in trends)
+    downtrend = len(trends) > 0 and all(t <= -trend_threshold_down for t in trends)
+    
+    # Generate signals only if a clear trend exists
+    # For a buy signal: if in a downtrend and the price is near the lower Bollinger band
+    # For a sell signal: if in an uptrend and the price is near the upper Bollinger band
+    data["Buy_Signal"] = downtrend & (data["Close"] <= data["BB_Lower"])
+    data["Sell_Signal"] = uptrend & (data["Close"] >= data["BB_Upper"])
     return data
 
 # ------------------------------------
 # Intraday Backtesting
-
 def backtest_intraday_strategy(data: pd.DataFrame) -> pd.DataFrame:
     df = data.copy()
     if "Date" not in df.columns:
@@ -142,12 +161,13 @@ def backtest_intraday_strategy(data: pd.DataFrame) -> pd.DataFrame:
     df = calculate_intraday_indicators(df)
     df.sort_values("Date", inplace=True)
     df = df.reset_index(drop=True)
-    df = generate_intraday_signals(df)
+    # Use the multi-timeframe signals
+    df = generate_intraday_signals_multitimeframe(df)
     df.set_index("Date", inplace=True)
     df["Signal"] = 0
     df.loc[df["Buy_Signal"], "Signal"] = 1
     df.loc[df["Sell_Signal"], "Signal"] = 0
-    # Forward-fill the position and shift by 1 to simulate entering at next bar
+    # Simulate entering at next bar: forward-fill the position and shift by 1
     df["Position"] = df["Signal"].replace(to_replace=0, method='ffill').shift(1).fillna(0)
     df["Market_Return"] = df["Close"].pct_change()
     df["Strategy_Return"] = df["Market_Return"] * df["Position"]
@@ -157,7 +177,6 @@ def backtest_intraday_strategy(data: pd.DataFrame) -> pd.DataFrame:
 
 # ------------------------------------
 # Data Retrieval for Intraday Data
-
 def get_intraday_stock_data(ticker: str, days: int = 1) -> Optional[pd.DataFrame]:
     try:
         end_date = datetime.datetime.now()
@@ -203,7 +222,6 @@ def get_intraday_stock_data(ticker: str, days: int = 1) -> Optional[pd.DataFrame
 
 # ------------------------------------
 # Historical Data Retrieval (for NN Forecasting)
-
 def get_historical_stock_data(ticker: str, days: int = 365) -> Optional[pd.DataFrame]:
     """
     Fetches daily historical bars for the past 'days' from Alpaca.
@@ -275,37 +293,24 @@ def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 20, future_st
     df.sort_values("Date", inplace=True)
     df.set_index("Date", inplace=True)
     close_prices = df["Close"].values.reshape(-1, 1)
-
-    # Scale the data to [0,1]
     scaler = MinMaxScaler(feature_range=(0, 1))
     scaled_data = scaler.fit_transform(close_prices)
-
-    # Check that we have enough data for training
     if len(scaled_data) <= window_size:
         st.error("Not enough historical data to train the LSTM model.")
         return pd.DataFrame()
-
-    # Prepare training sequences
     X, y = prepare_data(scaled_data, window_size)
     X = X.reshape((X.shape[0], X.shape[1], 1))
-
-    # Build and train LSTM model
     model = build_lstm_model((X.shape[1], 1))
     model.fit(X, y, epochs=10, batch_size=16, verbose=0)
-
-    # Forecast future steps using the last window of data
     last_window = scaled_data[-window_size:]
     predictions = []
     current_input = last_window.reshape(1, window_size, 1)
     for _ in range(future_steps):
         pred = model.predict(current_input, verbose=0)
         predictions.append(pred[0, 0])
-        # Fix: Reshape prediction to (1, 1, 1) and append it along the time axis.
+        # Reshape prediction to (1, 1, 1) and append along axis=1
         current_input = np.append(current_input[:, 1:, :], np.array(pred).reshape(1, 1, 1), axis=1)
-
     predictions = scaler.inverse_transform(np.array(predictions).reshape(-1, 1)).flatten()
-
-    # Generate forecast dates (skipping weekends)
     last_date = df.index[-1]
     forecast_dates = []
     current_date = last_date
@@ -317,152 +322,73 @@ def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 20, future_st
         "Date": forecast_dates,
         "Predicted_Close": predictions
     })
-    # Use tz_convert because dates are already tz-aware
     forecast_df["Date"] = pd.to_datetime(forecast_df["Date"]).dt.tz_convert("US/Eastern")
     return forecast_df
 
 # ------------------------------------
-# News and Sentiment Functions (optional)
-
-def get_stock_news(ticker: str) -> str:
-    url = f"https://finnhub.io/api/v1/company-news?symbol={ticker}&from=2025-03-01&to=2025-03-24&token={finnhub_api_key}"
-    response = requests.get(url)
-    data = response.json()
-    if response.status_code == 200 and data:
-        news_articles = []
-        for article in data[:3]:
-            title = article['headline']
-            article_url = article['url']
-            news_articles.append(f"• {title}: {article_url}")
-        return "\n".join(news_articles)
-    else:
-        return f"⚠️ No news available for {ticker}."
-
-@st.cache_data(ttl=3600)
-def get_market_sentiment(tickers: List[str]) -> dict:
-    sentiments = {}
-    rate_limit_error_flag = False
-    for ticker in tickers:
-        news_data = get_stock_news(ticker)
-        attempt = 1
-        while attempt <= 5:
-            try:
-                prompt = f"Analyze the market sentiment for {ticker} using the news below:\n{news_data}\nProvide a brief summary (bullish, bearish, or neutral) with key reasons. Limit to 250 words."
-                response = openai_client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": "You are a financial news analyst."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    max_tokens=400
-                )
-                sentiments[ticker] = response.choices[0].message.content.strip()
-                break
-            except openai.OpenAIError as e:
-                if not rate_limit_error_flag:
-                    sentiments['error'] = "⚠️ Rate limit reached. Try again later."
-                    rate_limit_error_flag = True
-                if attempt < 5:
-                    wait_time = 2 ** attempt
-                    time.sleep(wait_time)
-                    attempt += 1
-                else:
-                    sentiments[ticker] = "⚠️ Rate limit reached. Try again later."
-                    break
-        time.sleep(2)
-    return sentiments
-
-# ------------------------------------
 # Streamlit UI
-
 async def main():
-    st.title("📈 Technical Strategy Signals with Neural-Network Forecast")
+    st.title("📈 Trend-Based Strategy with Neural-Network Forecast")
     tickers_input = st.text_input("Enter stock ticker symbol(s), separated by commas", "AAPL", key="tickers_input")
     tickers = [ticker.strip().upper() for ticker in tickers_input.split(",") if ticker.strip()]
 
-    # Auto-refresh stock quotes every 5 minutes
+    # Auto-refresh intraday data every 5 minutes
     st_autorefresh(interval=300000, limit=0, key="intraday_autorefresh")
     
-    # Run analysis automatically if tickers are provided
     if tickers:
-        sentiments = get_market_sentiment(tickers)
+        # (Optional: add sentiment retrieval code here)
         for ticker in tickers:
-            if ticker in sentiments:
-                st.sidebar.subheader(f"📢 Sentiment for {ticker}")
-                st.sidebar.write(sentiments[ticker])
             st.subheader(f"📊 Intraday Stock Data for {ticker}")
             intraday_data = get_intraday_stock_data(ticker, days=1)
             if intraday_data is None or intraday_data.empty:
                 st.write(f"⚠️ No intraday data available for {ticker}")
                 continue
 
+            # Calculate indicators on intraday data
             processed_data = calculate_intraday_indicators(intraday_data)
-            processed_data = generate_intraday_signals(processed_data)
+            # Generate signals using multi-timeframe trend analysis.
+            # (Default thresholds can be tuned.)
+            processed_data = generate_intraday_signals_multitimeframe(processed_data,
+                                                                       trend_threshold_up=0.5,
+                                                                       trend_threshold_down=0.5)
 
+            # Plot intraday chart with fewer, high-probability signals
             fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=processed_data['Date'],
-                y=processed_data['Close'],
-                mode='lines',
-                name='Close Price'
-            ))
+            fig.add_trace(go.Scatter(x=processed_data["Date"], y=processed_data["Close"],
+                                     mode="lines", name="Close Price"))
             buy_signals = processed_data[processed_data["Buy_Signal"] == True]
             sell_signals = processed_data[processed_data["Sell_Signal"] == True]
-            fig.add_trace(go.Scatter(
-                x=buy_signals['Date'],
-                y=buy_signals['Close'],
-                mode='markers',
-                marker=dict(color='green', symbol='triangle-up', size=10),
-                name='Buy Signal'
-            ))
-            fig.add_trace(go.Scatter(
-                x=sell_signals['Date'],
-                y=sell_signals['Close'],
-                mode='markers',
-                marker=dict(color='red', symbol='triangle-down', size=10),
-                name='Sell Signal'
-            ))
-            fig.update_layout(
-                title=f"{ticker} Intraday Chart (1-minute) with Buy/Sell Signals (US/Eastern)",
-                xaxis_title="Time (US/Eastern)",
-                yaxis_title="Price",
-                legend_title="Signals"
-            )
+            fig.add_trace(go.Scatter(x=buy_signals["Date"], y=buy_signals["Close"],
+                                     mode="markers", marker=dict(color="green", symbol="triangle-up", size=12),
+                                     name="Buy Signal"))
+            fig.add_trace(go.Scatter(x=sell_signals["Date"], y=sell_signals["Close"],
+                                     mode="markers", marker=dict(color="red", symbol="triangle-down", size=12),
+                                     name="Sell Signal"))
+            fig.update_layout(title=f"{ticker} Intraday Chart (Reduced Signals, US/Eastern)",
+                              xaxis_title="Time (US/Eastern)", yaxis_title="Price")
             st.plotly_chart(fig, use_container_width=True)
 
-            st.subheader(f"📈 Strategy Backtest for {ticker}")
+            # Backtest the trend-based strategy
             bt_results = backtest_intraday_strategy(intraday_data)
             if not bt_results.empty:
                 bt_fig = go.Figure()
-                bt_fig.add_trace(go.Scatter(
-                    x=bt_results.index,
-                    y=bt_results['Cum_Market_Return'],
-                    mode='lines',
-                    name='Buy & Hold',
-                    line=dict(color='blue', width=2),
-                    hovertemplate='%{x|%Y-%m-%d %H:%M}<br>Buy & Hold: %{y:.2f}<extra></extra>'
-                ))
-                bt_fig.add_trace(go.Scatter(
-                    x=bt_results.index,
-                    y=bt_results['Cum_Strategy_Return'],
-                    mode='lines',
-                    name='Intraday Strategy',
-                    line=dict(color='orange', width=2),
-                    hovertemplate='%{x|%Y-%m-%d %H:%M}<br>Strategy: %{y:.2f}<extra></extra>'
-                ))
-                bt_fig.update_layout(
-                    title=f"Intraday Strategy vs. Buy & Hold: {ticker}",
-                    xaxis_title="Time (US/Eastern)",
-                    yaxis_title="Cumulative Return",
-                    legend_title="Strategy",
-                    hovermode="x unified",
-                    template="plotly_white"
-                )
+                bt_fig.add_trace(go.Scatter(x=bt_results.index, y=bt_results["Cum_Market_Return"],
+                                            mode="lines", name="Buy & Hold",
+                                            line=dict(color="blue", width=2),
+                                            hovertemplate='%{x|%Y-%m-%d %H:%M}<br>Buy & Hold: %{y:.2f}<extra></extra>'))
+                bt_fig.add_trace(go.Scatter(x=bt_results.index, y=bt_results["Cum_Strategy_Return"],
+                                            mode="lines", name="Strategy",
+                                            line=dict(color="orange", width=2),
+                                            hovertemplate='%{x|%Y-%m-%d %H:%M}<br>Strategy: %{y:.2f}<extra></extra>'))
+                bt_fig.update_layout(title=f"Intraday Strategy vs. Buy & Hold: {ticker}",
+                                     xaxis_title="Time (US/Eastern)", yaxis_title="Cumulative Return",
+                                     hovermode="x unified", template="plotly_white")
                 st.plotly_chart(bt_fig, use_container_width=True)
             else:
                 st.write("⚠️ No backtest data available.")
 
-            st.subheader(f"🔮 Neural Network Forecast for {ticker}")
+            # LSTM-based Price Forecasting
+            st.subheader(f"🔮 Stock Price Forecast for {ticker}")
             historical_data = get_historical_stock_data(ticker, days=365)
             if historical_data is None or historical_data.empty:
                 st.write(f"⚠️ No historical data available for {ticker} for forecasting.")
@@ -471,67 +397,37 @@ async def main():
                 hist_df = historical_data.copy()
                 hist_df.sort_values("Date", inplace=True)
                 fig_nn = go.Figure()
-                fig_nn.add_trace(go.Scatter(
-                    x=hist_df["Date"],
-                    y=hist_df["Close"],
-                    mode='lines',
-                    name='Historical Close'
-                ))
-                fig_nn.add_trace(go.Scatter(
-                    x=forecast_df["Date"],
-                    y=forecast_df["Predicted_Close"],
-                    mode='lines+markers',
-                    name='Forecast'
-                ))
-                fig_nn.update_layout(
-                    title=f"{ticker} Daily Close and 5-Day Forecast (LSTM)",
-                    xaxis_title="Date (US/Eastern)",
-                    yaxis_title="Price",
-                    legend_title="Series"
-                )
+                fig_nn.add_trace(go.Scatter(x=hist_df["Date"], y=hist_df["Close"],
+                                            mode="lines", name="Historical Close"))
+                fig_nn.add_trace(go.Scatter(x=forecast_df["Date"], y=forecast_df["Predicted_Close"],
+                                            mode="lines+markers", name="Forecast"))
+                fig_nn.update_layout(title=f"{ticker} Daily Close and 5-Day Forecast (LSTM)",
+                                     xaxis_title="Date (US/Eastern)", yaxis_title="Price")
                 st.plotly_chart(fig_nn, use_container_width=True)
 
-# Neural Network Forecasting Function with Fix and Data Check
+# Neural Network Forecasting Function for Stock Prices
 def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 20, future_steps: int = 5) -> pd.DataFrame:
-    """
-    Trains a simple LSTM model on historical daily closing prices and forecasts future_steps days.
-    Returns a DataFrame with forecasted dates and predicted closing prices.
-    """
     df = data.copy()
     df.sort_values("Date", inplace=True)
     df.set_index("Date", inplace=True)
     close_prices = df["Close"].values.reshape(-1, 1)
-
-    # Scale the data to [0,1]
     scaler = MinMaxScaler(feature_range=(0, 1))
     scaled_data = scaler.fit_transform(close_prices)
-
-    # Check that we have enough data
     if len(scaled_data) <= window_size:
         st.error("Not enough historical data to train the LSTM model.")
         return pd.DataFrame()
-
-    # Prepare training sequences
     X, y = prepare_data(scaled_data, window_size)
     X = X.reshape((X.shape[0], X.shape[1], 1))
-
-    # Build and train LSTM model
     model = build_lstm_model((X.shape[1], 1))
     model.fit(X, y, epochs=10, batch_size=16, verbose=0)
-
-    # Forecast future steps using the last window of data
     last_window = scaled_data[-window_size:]
     predictions = []
     current_input = last_window.reshape(1, window_size, 1)
     for _ in range(future_steps):
         pred = model.predict(current_input, verbose=0)
         predictions.append(pred[0, 0])
-        # Fix: Reshape prediction to (1, 1, 1) and append along axis=1
         current_input = np.append(current_input[:, 1:, :], np.array(pred).reshape(1, 1, 1), axis=1)
-
     predictions = scaler.inverse_transform(np.array(predictions).reshape(-1, 1)).flatten()
-
-    # Generate forecast dates (skipping weekends)
     last_date = df.index[-1]
     forecast_dates = []
     current_date = last_date
@@ -539,11 +435,7 @@ def predict_stock_with_lstm(data: pd.DataFrame, window_size: int = 20, future_st
         current_date += datetime.timedelta(days=1)
         if current_date.weekday() < 5:
             forecast_dates.append(current_date)
-    forecast_df = pd.DataFrame({
-        "Date": forecast_dates,
-        "Predicted_Close": predictions
-    })
-    # Use tz_convert because dates are already tz-aware
+    forecast_df = pd.DataFrame({"Date": forecast_dates, "Predicted_Close": predictions})
     forecast_df["Date"] = pd.to_datetime(forecast_df["Date"]).dt.tz_convert("US/Eastern")
     return forecast_df
 
